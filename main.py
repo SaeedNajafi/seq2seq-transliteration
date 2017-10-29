@@ -110,7 +110,7 @@ def LD(y1, y2):
     return dist
 
 def evaluate():
-    with open(filename, "r") as f:
+    with open('temp.predicted', "r") as f:
         lines = f.readlines()
         dist = 0.0
         for each in lines:

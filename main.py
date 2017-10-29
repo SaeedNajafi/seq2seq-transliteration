@@ -91,6 +91,7 @@ def save_predictions(
                 f.write(to_file)
     return
 
+#Recursive Levenshtein Function in Python
 def LD(y1, y2):
     if y1 == "":
         return len(y2)
@@ -172,8 +173,8 @@ def run(mode):
                                 predictions,
                                 predictions_length,
                                 "temp.predicted",
-                                data['dev_data']['X_length'],
                                 data['dev_data']['X'],
+                                data['dev_data']['X_length'],
                                 data['dev_data']['Y'],
                                 data['dev_data']['Y_length'],
                                 data['s_num_to_char'],
@@ -221,8 +222,8 @@ def run(mode):
                             predictions,
                             predictions_length,
                             "test.predicted",
-                            data['test_data']['X_length'],
                             data['test_data']['X'],
+                            data['test_data']['X_length'],
                             None,
                             None,
                             data['s_num_to_char'],

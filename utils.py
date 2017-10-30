@@ -11,9 +11,17 @@ def load(config, mode):
     print "INFO: creating random character vectors!"
     with open(config.source_alphabet) as f:
         s_chars = [char.strip() for char in f]
+        #end symbol
+        s_chars.append("_")
+
+    config.s_alphabet_size = len(s_chars)
 
     with open(config.target_alphabet) as f:
         t_chars = [char.strip() for char in f]
+        #end symbol
+        t_chars.append("_")
+
+    config.t_alphabet_size = len(t_chars)
 
     s_num_to_char = dict(enumerate(s_chars))
     s_char_to_num = {v:k for k,v in s_num_to_char.iteritems()}
@@ -148,6 +156,9 @@ def map_char(word, charset, map_to_num):
 			out.append(map_to_num[each])
         else:
             print "could not find the char:" + each
+
+    #adding end sign
+    out.append(map_to_num["_"])
 	return out
 
 def data_iterator(

@@ -21,7 +21,8 @@ def run_epoch(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
                     Y=Y_in,
                     Y_length=Y_length_in,
                     Y_mask=Y_mask_in,
-                    dropout=config.dropout
+                    dropout=config.dropout,
+                    mode=True
                     )
         loss , _ = session.run([model.loss, model.train_op], feed_dict=feed)
         total_loss.append(loss)
@@ -44,7 +45,8 @@ def predict(config, model, session, X, X_length, X_mask):
                     Y=None,
                     Y_length=None,
                     Y_mask=None,
-                    dropout=1
+                    dropout=1,
+                    mode=False
                     )
 
         batch_predicted_indices, batch_lengths = session.run([model.outputs, model.lengths], feed_dict=feed)
@@ -72,19 +74,22 @@ def save_predictions(
             batch_predictions = predictions[batch_index]
             b_size = len(batch_predictions)
             for word_index in range(b_size):
+                ad = (batch_index * config.batch_size) + word_index
+                s_to_file = ""
+                t_to_file = ""
+                p_to_file = ""
+                p_end = False
                 for char_index in range(config.max_length):
-                    ad = (batch_index * config.batch_size) + word_index
-                    s_to_file = ""
-                    t_to_file = ""
-                    p_to_file = ""
-                    if(char_index < X_length[ad]):
+                    #not considering the end sign
+                    if(char_index < X_length[ad] - 1):
                         s_to_file += str(s_num_to_char[X[ad][char_index]])
 
-                    if(char_index < predictions_length[ad]):
+                    if(t_num_to_char[predictions[ad][char_index]]!="_" and p_end==False):
                         p_to_file += str(t_num_to_char[predictions[ad][char_index]])
+                    else: p_end = True
 
                     if Y is not None:
-                        if(char_index < Y_length[ad]):
+                        if(char_index < Y_length[ad] - 1):
                             t_to_file += str(t_num_to_char[Y[ad][char_index]])
 
                 to_file = s_to_file + "\t" + t_to_file + "\t" + p_to_file+ "\n"

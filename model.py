@@ -87,14 +87,14 @@ class Model(object):
                                 )
 
         with tf.variable_scope("t_embeddings"):
-            t_lookup_table = tf.Variable(
+            self.t_lookup_table = tf.Variable(
                                	    t_char_vectors,
                                     name="t_lookup_table",
                                     dtype=tf.float32
                                     )
 
             t_embeddings = tf.nn.embedding_lookup(
-                                t_lookup_table,
+                                self.t_lookup_table,
                                 self.Y_placeholder
                                 )
 
@@ -158,7 +158,7 @@ class Model(object):
             (h_fw, h_bw), _ = tf.nn.bidirectional_dynamic_rnn(
                                         forward_encoder_lstm,
                                         backward_encoder_lstm,
-                                        s_embeddings,
+                                        s_embed,
                                         sequence_length=self.X_length_placeholder,
                                         initial_state_fw=None,
                                         initial_state_bw=None,
@@ -209,10 +209,7 @@ class Model(object):
 
         return H
 
-    def decoder(self, H, t_embed, config, mode):
-
-        with tf.variable_scope("t_embeddings", reuse=True):
-            t_lookup_table = tf.get_variable("t_lookup_table")
+    def decoder(self, H, t_embed, config):
 
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
@@ -256,29 +253,29 @@ class Model(object):
         t_embed_tra = tf.transpose(t_embed, [1,0,2])
         logits_generated = []
         greedy_outputs = []
-        with tf.variable_scope('decoder_rnn', reuse=True) as scope:
-            initial_state = self.decoder_lstm_cell.zero_state(b_size, tf.float32)
+        with tf.variable_scope('decoder_rnn') as scope:
+            initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
             for time_index in range(config.max_length):
                 if time_index==0:
-                    output, state = self.decoder_lstm_cell(GO_symbol, initial_state)
+                    output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     scope.reuse_variables()
-                    output, state = self.decoder_lstm_cell(prev_output, state)
+                    output, state = self.decoder_lstm(prev_output, state)
 
                 output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
 
                 # Dot Global Attention Part
-                Attention = tf.softmax(tf.reduce_sum(tf.multiply(H, tf.expand_dims(output_dropped, axis=1)), axis=2))
+                Attention = tf.nn.softmax(tf.reduce_sum(tf.multiply(H, tf.expand_dims(output_dropped, axis=1)), axis=2))
                 Context = tf.reduce_sum(tf.multiply(tf.expand_dims(Attention, axis=2), H), axis=1)
                 C_and_output = tf.concat([Context, output_dropped], axis=1)
                 m = tf.add(tf.matmul(tf.tanh(tf.matmul(C_and_output, Con_W)), W_softmax), b_softmax)
 
                 logit_generated = tf.reshape(m, (-1, config.max_length, config.t_alphabet_size))
                 logits_generated.append(logit_generated)
-                generated_index = tf.argmax(tf.softmax(logit_generated), axis=1)
+                generated_index = tf.argmax(tf.nn.softmax(logit_generated), axis=1)
                 def teacher_force(): return t_embed_tra[time_index]
-                def greedy(): return tf.nn.embedding_lookup(t_lookup_table, generated_index)
-                prev_output = tf.cond(tf.equal(self.mode_placeholder), teacher_force, greedy)
+                def greedy(): return tf.nn.embedding_lookup(self.t_lookup_table, generated_index)
+                prev_output = tf.cond(tf.equal(self.mode_placeholder, True), teacher_force, greedy)
                 greedy_outputs.append(generated_index)
 
         outputs = tf.stack(greedy_outputs, axis=1)

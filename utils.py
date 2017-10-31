@@ -9,17 +9,21 @@ def load(config, mode):
     """
 
     print "INFO: creating random character vectors!"
-    with open(config.source_alphabet) as f:
-        s_chars = [char.strip() for char in f]
-        #end symbol
-        s_chars.append("_")
+    s_chars = []
+    f = open(config.source_alphabet, 'r')
+    lines = f.readlines()
+    for line in lines:
+        s_chars.append(line.decode('utf8').strip())
+    s_chars.append("_")
 
     config.s_alphabet_size = len(s_chars)
 
-    with open(config.target_alphabet) as f:
-        t_chars = [char.strip() for char in f]
-        #end symbol
-        t_chars.append("_")
+    t_chars = []
+    f = open(config.target_alphabet, 'r')
+    lines = f.readlines()
+    for line in lines:
+        t_chars.append(line.decode('utf8').strip())
+    t_chars.append("_")
 
     config.t_alphabet_size = len(t_chars)
 
@@ -42,7 +46,7 @@ def load(config, mode):
                             t_chars,
                             s_char_to_num,
                             t_char_to_num,
-                            max_length,
+                            config.max_length,
                             mode
                             )
 
@@ -54,7 +58,7 @@ def load(config, mode):
                             t_chars,
                             s_char_to_num,
                             t_char_to_num,
-                            max_length,
+                            config.max_length,
                             mode
                             )
 
@@ -67,7 +71,7 @@ def load(config, mode):
                             t_chars,
                             s_char_to_num,
                             t_char_to_num,
-                            max_length,
+                            config.max_length,
                             mode
                             )
 
@@ -99,14 +103,14 @@ def load_dataset(
     Y_mask = []
     with open(fname) as f:
         for line in f:
-            XY = line.strip().split("\t")
+            XY = line.decode('utf-8').strip().split("\t")
             if len(XY) > 0:
                 X = map_char(XY[0], s_chars, s_char_to_num)
                 ln = len(X)
                 X_length.append(ln)
                 mask_list = [1.0] * ln
                 if ln < max_length:
-                    while ln < max_ength:
+                    while ln < max_length:
                         X.append(0)
                         mask_list.append(0.0)
                         ln += 1
@@ -123,7 +127,7 @@ def load_dataset(
                     Y_length.append(ln)
                     mask_list = [1.0] * ln
                     if ln < max_length:
-                        while ln < max_ength:
+                        while ln < max_length:
                             Y.append(0)
                             mask_list.append(0.0)
                             ln += 1

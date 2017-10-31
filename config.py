@@ -2,11 +2,11 @@ class Configuration(object):
     """Model hyper parameters and data information"""
 
     #Path to different files
-    source_alphabet = './data/source.txt'
-    target_alphabet = './data/target.txt'
-    train_set = './data/train.txt'
-    dev_set = './data/dev.txt'
-    test_set = './data/test.txt'
+    source_alphabet = './data/EnPe/source.txt'
+    target_alphabet = './data/EnPe/target.txt'
+    train_set = './data/EnPe/train-pe.txt'
+    dev_set = './data/EnPe/dev-pe.txt'
+    test_set = './data/EnPe/enpe11.txt'
 
     #Neural hyper params
     s_embedding_size = 16

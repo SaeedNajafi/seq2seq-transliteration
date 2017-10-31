@@ -60,9 +60,9 @@ def save_predictions(
             predictions,
             predictions_length,
             filename,
-            X
+            X,
             X_length,
-            Y
+            Y,
             Y_length,
             s_num_to_char,
             t_num_to_char
@@ -133,7 +133,7 @@ def run(mode):
     """run the model's implementation.
     """
     config = Configuration()
-    data = ut.load_data(config, mode)
+    data = ut.load(config, mode)
     model = Model(config)
 
     init = tf.global_variables_initializer()

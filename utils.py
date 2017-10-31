@@ -134,9 +134,9 @@ def load_dataset(
                     Y_data.append(Y)
                     Y_mask.append(mask_list)
 
-             else:
-                 print "Wrong input file format!"
-                 exit()
+                else:
+                    print "Wrong input file format!"
+                    exit()
 
     ret = {
             'X': array(X_data),
@@ -150,16 +150,16 @@ def load_dataset(
     return ret
 
 def map_char(word, charset, map_to_num):
-	out = []
-	for each in list(word):
-		if each in charset:
-			out.append(map_to_num[each])
+    out = []
+    for each in list(word):
+        if each in charset:
+            out.append(map_to_num[each])
         else:
             print "could not find the char:" + each
 
     #adding end sign
-    out.append(map_to_num["_"])
-	return out
+    out.append(map_to_num['_'])
+    return out
 
 def data_iterator(
         X,

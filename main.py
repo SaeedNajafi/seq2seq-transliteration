@@ -7,7 +7,7 @@ import sys
 import time
 import os
 
-def run_epoch(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
+def train(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
 
     # We're interested in keeping track of the loss during training
     total_loss = []
@@ -32,33 +32,29 @@ def run_epoch(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
 
     return np.mean(total_loss)
 
-def predict(config, model, session, X, X_length, X_mask):
+def dev_predict(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
     results = []
-    lengths = []
     total_steps = int(np.ceil(len(X) / float(config.batch_size)))
-    data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, True)
+    data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, False)
     for step, (X_in, X_length_in, X_mask_in, Y_in, Y_length_in, Y_mask_in) in enumerate(data):
         feed = model.create_feed_dict(
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
-                    Y=None,
-                    Y_length=None,
-                    Y_mask=None,
+		    Y=Y_in,
+                    Y_length=Y_length_in,
+                    Y_mask=Y_mask_in,
                     dropout=1,
                     mode=False
                     )
 
-        batch_predicted_indices, batch_lengths = session.run([model.outputs, model.lengths], feed_dict=feed)
+        batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
         results.append(batch_predicted_indices[0])
-        lengths.append(batch_lengths[0])
-
-    return results, lengths
+    return results
 
 def save_predictions(
             config,
             predictions,
-            predictions_length,
             filename,
             X,
             X_length,
@@ -82,15 +78,15 @@ def save_predictions(
                 for char_index in range(config.max_length):
                     #not considering the end sign
                     if(char_index < X_length[ad] - 1):
-                        s_to_file += str(s_num_to_char[X[ad][char_index]])
-
-                    if(t_num_to_char[predictions[ad][char_index]]!="_" and p_end==False):
-                        p_to_file += str(t_num_to_char[predictions[ad][char_index]])
-                    else: p_end = True
+                        s_to_file += str(s_num_to_char[X[ad][char_index]].encode('utf8'))
+		    print s_to_file
+                    #if(str(t_num_to_char[predictions[ad][char_index]])!="_" and p_end==False):
+                    #    p_to_file += str(t_num_to_char[predictions[ad][char_index]])
+                    #else: p_end = True
 
                     if Y is not None:
                         if(char_index < Y_length[ad] - 1):
-                            t_to_file += str(t_num_to_char[Y[ad][char_index]])
+                            t_to_file += str(t_num_to_char[Y[ad][char_index]].encode('utf8'))
 
                 to_file = s_to_file + "\t" + t_to_file + "\t" + p_to_file+ "\n"
                 f.write(to_file)
@@ -151,7 +147,7 @@ def run(mode):
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
-                train_loss = run_epoch(
+                train_loss = train(
                                     config,
                                     model,
                                     session,
@@ -163,20 +159,22 @@ def run(mode):
                                     data['train_data']['Y_mask']
                                     )
 
-                predictions, predictions_length = predict(
-                                                    config,
-                                                    model,
-                                                    session,
-                                                    data['dev_data']['X'],
-                                                    data['dev_data']['X_length'],
-                                                    data['dev_data']['X_mask']
-                                                    )
+                predictions = dev_predict(
+                                     config,
+                                     model,
+                                     session,
+                                     data['dev_data']['X'],
+                                     data['dev_data']['X_length'],
+                                     data['dev_data']['X_mask'],
+				     data['train_data']['Y'],
+                                     data['train_data']['Y_length'],
+                                     data['train_data']['Y_mask']
+                                     )
 
                 print 'Training loss: {}'.format(train_loss)
                 save_predictions(
                                 config,
                                 predictions,
-                                predictions_length,
                                 "temp.predicted",
                                 data['dev_data']['X'],
                                 data['dev_data']['X_length'],
@@ -211,21 +209,20 @@ def run(mode):
             print
             print 'Test'
             start = time.time()
-            predictions, predictions_length = predict(
-                                                    config,
-                                                    model,
-                                                    session,
-                                                    data['test_data']['X'],
-                                                    data['test_data']['X_length'],
-                                                    data['test_data']['X_mask']
-                                                    )
+            predictions = predict(
+                                 config,
+                                 model,
+                                 session,
+                                 data['test_data']['X'],
+                                 data['test_data']['X_length'],
+                                 data['test_data']['X_mask']
+                                 )
 
             print 'Total prediction time: {} seconds'.format(time.time() - start)
             print 'Writing predictions to test.predicted'
             save_predictions(
                             config,
                             predictions,
-                            predictions_length,
                             "test.predicted",
                             data['test_data']['X'],
                             data['test_data']['X_length'],

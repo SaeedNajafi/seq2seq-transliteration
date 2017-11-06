@@ -13,8 +13,14 @@ class Model(object):
 
         H = self.encoder(s_embed, config)
 
-        self.loss, self.outputs = self.decoder(H, t_embed, config)
-
+        M, self.outputs = self.decoder(H, t_embed, config)
+	self.loss = tf.contrib.seq2seq.sequence_loss(
+                                    logits=M,
+                                    targets=self.Y_placeholder,
+                                    weights=self.Y_mask_placeholder,
+                                    average_across_timesteps=True,
+                                    average_across_batch=True
+                                    )
         self.train_op = self.add_training_op(self.loss, config)
         return
 
@@ -47,14 +53,12 @@ class Model(object):
             self.X_placeholder: X,
             self.X_length_placeholder: X_length,
             self.X_mask_placeholder: X_mask,
+	    self.Y_placeholder: Y,
+            self.Y_length_placeholder: Y_length,
+            self.Y_mask_placeholder: Y_mask,
             self.dropout_placeholder: dropout,
             self.mode_placeholder: mode
             }
-
-        if Y is not None:
-            feed_dict[self.Y_placeholder] = Y
-            feed_dict[self.Y_length_placeholder] = Y_length
-            feed_dict[self.Y_mask_placeholder] = Y_mask
 
         return feed_dict
 
@@ -251,7 +255,7 @@ class Model(object):
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         t_embed_tra = tf.transpose(t_embed, [1,0,2])
-        logits_generated = []
+        M = []
         greedy_outputs = []
         with tf.variable_scope('decoder_rnn') as scope:
             initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
@@ -269,25 +273,17 @@ class Model(object):
                 Context = tf.reduce_sum(tf.multiply(tf.expand_dims(Attention, axis=2), H), axis=1)
                 C_and_output = tf.concat([Context, output_dropped], axis=1)
                 m = tf.add(tf.matmul(tf.tanh(tf.matmul(C_and_output, Con_W)), W_softmax), b_softmax)
-
-                logit_generated = tf.reshape(m, (-1, config.max_length, config.t_alphabet_size))
-                logits_generated.append(logit_generated)
-                generated_index = tf.argmax(tf.nn.softmax(logit_generated), axis=1)
+                M.append(m)
+                generated_index = tf.argmax(tf.nn.softmax(m), axis=1)
                 def teacher_force(): return t_embed_tra[time_index]
                 def greedy(): return tf.nn.embedding_lookup(self.t_lookup_table, generated_index)
-                prev_output = tf.cond(tf.equal(self.mode_placeholder, True), teacher_force, greedy)
+                prev_output = tf.cond(self.mode_placeholder, teacher_force, greedy)
                 greedy_outputs.append(generated_index)
 
-        outputs = tf.stack(greedy_outputs, axis=1)
-        logits_generated = tf.stack(logits_generated, axis=1)
-        loss = tf.contrib.seq2seq.sequence_loss(
-                                    logits=logits_generated,
-                                    targets=self.Y_placeholder,
-                                    weights=self.Y_mask_placeholder,
-                                    average_across_timesteps=True,
-                                    average_across_batch=True
-                                    )
-        return loss, outputs
+        greedy_outputs = tf.stack(greedy_outputs, axis=1)
+        M = tf.stack(M, axis=1)
+
+        return M, greedy_outputs
 
     def add_training_op(self, loss, config):
         """Sets up the training Ops.

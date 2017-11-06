@@ -81,7 +81,6 @@ def load(config, mode):
     ret['train_data'] = train_data
     ret['dev_data'] = dev_data
     ret['test_data'] = test_data
-
     return ret
 
 def load_dataset(
@@ -111,7 +110,7 @@ def load_dataset(
                 mask_list = [1.0] * ln
                 if ln < max_length:
                     while ln < max_length:
-                        X.append(0)
+                        X.append(len(s_chars)-1)
                         mask_list.append(0.0)
                         ln += 1
                 else:
@@ -128,7 +127,7 @@ def load_dataset(
                     mask_list = [1.0] * ln
                     if ln < max_length:
                         while ln < max_length:
-                            Y.append(0)
+                            Y.append(len(t_chars)-1)
                             mask_list.append(0.0)
                             ln += 1
                     else:
@@ -190,6 +189,8 @@ def data_iterator(
         ret_X_mask = X_mask[batch_start:batch_start + batch_size][:]
 
         ret_Y = None
+	ret_Y_mask = None
+	ret_Y_length = None
         if np.any(Y):
             ret_Y = Y[batch_start:batch_start + batch_size][:]
             ret_Y_length = Y_length[batch_start:batch_start + batch_size][:]

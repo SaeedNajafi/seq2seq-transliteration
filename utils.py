@@ -37,7 +37,7 @@ def load(config, mode):
 
     t_num_to_char = dict(enumerate(t_chars))
     t_char_to_num = {v:k for k,v in t_num_to_char.iteritems()}
-
+        
     train_data = None
     dev_data = None
     test_data = None

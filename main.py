@@ -62,6 +62,7 @@ def save_predictions(
 
     """Saves predictions to the provided file."""
     with open(filename, "wb") as f:
+
         for batch_index in range(len(predictions)):
             batch_predictions = predictions[batch_index]
             b_size = len(batch_predictions)
@@ -77,8 +78,8 @@ def save_predictions(
                     if(char_index < X_length[ad] - 1):
                         s_to_file += str(s_num_to_char[X[ad][char_index]].encode('utf8'))
 
-                    if(str(t_num_to_char[int(batch_predictions[word_index][char_index])].encode('utf8'))!="#" and p_end==False):
-                        p_to_file += str(t_num_to_char[batch_predictions[word_index][char_index]].encode('utf8'))
+                    if(str(t_num_to_char[int(predictions[ad][char_index])].encode('utf8'))!="#" and p_end==False):
+                        p_to_file += str(t_num_to_char[predictions[ad][char_index]].encode('utf8'))
                     else: p_end = True
 
                     if Y is not None:
@@ -191,7 +192,7 @@ def run(mode):
                                 data['dev_data']['Y_length']
                                 )
 
-                dev_cost = avg_edit_distance("temp.predicted")
+                dev_cost = avg_edit_distance()
                 print 'Validation cost: {}'.format(dev_cost)
 
                 if  dev_cost < best_dev_cost:

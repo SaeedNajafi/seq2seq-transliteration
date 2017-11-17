@@ -37,7 +37,7 @@ def load(config, mode):
 
     t_num_to_char = dict(enumerate(t_chars))
     t_char_to_num = {v:k for k,v in t_num_to_char.iteritems()}
-        
+
     train_data = None
     dev_data = None
     test_data = None
@@ -142,9 +142,9 @@ def load_dataset(
                     Y_data.append(Y)
                     Y_mask.append(mask_list)
 
-                else:
-                    print "Wrong input file format!"
-                    exit()
+            else:
+                print "Wrong input file format!"
+                exit()
 
     ret = {
             'X': array(X_data),

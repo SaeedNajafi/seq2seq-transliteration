@@ -14,7 +14,7 @@ def load(config, mode):
     lines = f.readlines()
     for line in lines:
         s_chars.append(line.decode('utf8').strip())
-    s_chars.append("_")
+    s_chars.append("#")
 
     config.s_alphabet_size = len(s_chars)
 
@@ -23,7 +23,12 @@ def load(config, mode):
     lines = f.readlines()
     for line in lines:
         t_chars.append(line.decode('utf8').strip())
+
+    #nill character
     t_chars.append("_")
+
+    #end of token
+    t_chars.append("#")
 
     config.t_alphabet_size = len(t_chars)
 
@@ -161,7 +166,7 @@ def map_char(word, charset, map_to_num):
             print "could not find the char:" + each
 
     #adding end sign
-    out.append(map_to_num['_'])
+    out.append(map_to_num['#'])
     return out
 
 def data_iterator(
@@ -189,8 +194,8 @@ def data_iterator(
         ret_X_mask = X_mask[batch_start:batch_start + batch_size][:]
 
         ret_Y = None
-	ret_Y_mask = None
-	ret_Y_length = None
+        ret_Y_mask = None
+        ret_Y_length = None
         if np.any(Y):
             ret_Y = Y[batch_start:batch_start + batch_size][:]
             ret_Y_length = Y_length[batch_start:batch_start + batch_size][:]

@@ -4,9 +4,9 @@ class Configuration(object):
     #Path to different files
     source_alphabet = './data/EnPe/source.txt'
     target_alphabet = './data/EnPe/target.txt'
-    train_set = './data/EnPe/train-pe.txt'
-    dev_set = './data/EnPe/dev-pe.txt'
-    test_set = './data/EnPe/enpe11.txt'
+    train_set = './data/EnPe/mytrain.txt'
+    dev_set = './data/EnPe/mydev.txt'
+    test_set = './data/EnPe/mytest.txt'
 
     #Neural hyper params
     s_embedding_size = 16
@@ -26,3 +26,11 @@ class Configuration(object):
     max_gradient_norm = 5.
     max_epochs = 50
     early_stopping = 2
+
+    #inference='crf'
+    inference='reinforced-decoder-rnn'
+
+    decoding = 'greedy'
+    #decoding = 'beamsearch'
+    #beamsize = 4
+    

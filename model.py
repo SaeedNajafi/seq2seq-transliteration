@@ -13,8 +13,9 @@ class Model(object):
 
         H = self.encoder(s_embed, config)
 
-        M, self.outputs = self.decoder(H, t_embed, config)
-	self.loss = tf.contrib.seq2seq.sequence_loss(
+        M = self.decoder(H, t_embed, config)
+        
+        self.loss = tf.contrib.seq2seq.sequence_loss(
                                     logits=M,
                                     targets=self.Y_placeholder,
                                     weights=self.Y_mask_placeholder,
@@ -22,6 +23,7 @@ class Model(object):
                                     average_across_batch=True
                                     )
         self.train_op = self.add_training_op(self.loss, config)
+
         return
 
     def placeholders(self, config):
@@ -37,10 +39,9 @@ class Model(object):
         self.Y_length_placeholder = tf.placeholder(tf.int32, shape=(None,))
         self.Y_mask_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, config.max_length))
         self.dropout_placeholder = tf.placeholder(dtype=tf.float32, shape=())
-        self.mode_placeholder = tf.placeholder(dtype=tf.bool, shape=())
         return
 
-    def create_feed_dict(self, X, X_length, X_mask, Y, Y_length, Y_mask, dropout, mode):
+    def create_feed_dict(self, X, X_length, X_mask, dropout, Y=None, Y_length=None, Y_mask=None):
         """Creates the feed_dict.
         A feed_dict takes the form of:
         feed_dict = {
@@ -53,11 +54,10 @@ class Model(object):
             self.X_placeholder: X,
             self.X_length_placeholder: X_length,
             self.X_mask_placeholder: X_mask,
-	    self.Y_placeholder: Y,
+            self.dropout_placeholder: dropout
+            self.Y_placeholder: Y,
             self.Y_length_placeholder: Y_length,
-            self.Y_mask_placeholder: Y_mask,
-            self.dropout_placeholder: dropout,
-            self.mode_placeholder: mode
+            self.Y_mask_placeholder: Y_mask
             }
 
         return feed_dict
@@ -217,16 +217,9 @@ class Model(object):
 
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
-            Con_W = tf.get_variable(
-                            "Con_W",
-                            (config.h_units + config.h_units, config.h_units),
-                            tf.float32,
-                            self.xavier_initializer
-                            )
-
             W_softmax = tf.get_variable(
                             "W_softmax",
-                            (config.h_units, config.t_alphabet_size),
+                            (2 * config.h_units, config.t_alphabet_size),
                             tf.float32,
                             self.xavier_initializer
                             )
@@ -255,8 +248,9 @@ class Model(object):
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         t_embed_tra = tf.transpose(t_embed, [1,0,2])
+        H_tra = tf.transpose(H, [1,0,2])
+
         M = []
-        greedy_outputs = []
         with tf.variable_scope('decoder_rnn') as scope:
             initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
             for time_index in range(config.max_length):
@@ -264,26 +258,16 @@ class Model(object):
                     output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     scope.reuse_variables()
-                    output, state = self.decoder_lstm(prev_output, state)
+                    output, state = self.decoder_lstm(t_embed_tra[time_index-1], state)
 
                 output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
-
-                # Dot Global Attention Part
-                Attention = tf.nn.softmax(tf.reduce_sum(tf.multiply(H, tf.expand_dims(output_dropped, axis=1)), axis=2))
-                Context = tf.reduce_sum(tf.multiply(tf.expand_dims(Attention, axis=2), H), axis=1)
-                C_and_output = tf.concat([Context, output_dropped], axis=1)
-                m = tf.add(tf.matmul(tf.tanh(tf.matmul(C_and_output, Con_W)), W_softmax), b_softmax)
+                H_and_output = tf.concat([H_tra[time_index], output_dropped], axis=1)
+                m = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
                 M.append(m)
-                generated_index = tf.argmax(tf.nn.softmax(m), axis=1)
-                def teacher_force(): return t_embed_tra[time_index]
-                def greedy(): return tf.nn.embedding_lookup(self.t_lookup_table, generated_index)
-                prev_output = tf.cond(self.mode_placeholder, teacher_force, greedy)
-                greedy_outputs.append(generated_index)
 
-        greedy_outputs = tf.stack(greedy_outputs, axis=1)
-        M = tf.stack(M, axis=1)
+            M = tf.stack(M, axis=1)
 
-        return M, greedy_outputs
+        return M
 
     def add_training_op(self, loss, config):
         """Sets up the training Ops.

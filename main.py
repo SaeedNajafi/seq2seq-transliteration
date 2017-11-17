@@ -18,21 +18,21 @@ def train(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
+                    dropout=config.dropout,
                     Y=Y_in,
                     Y_length=Y_length_in,
-                    Y_mask=Y_mask_in,
-                    dropout=config.dropout,
-                    mode=True
+                    Y_mask=Y_mask_in
                     )
         loss , _ = session.run([model.loss, model.train_op], feed_dict=feed)
         total_loss.append(loss)
+
         ##
         sys.stdout.write('\r{} / {} : loss = {}'.format(step, total_steps, np.mean(total_loss)))
         sys.stdout.flush()
 
     return np.mean(total_loss)
 
-def dev_predict(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
+def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, Y_mask=None):
     results = []
     total_steps = int(np.ceil(len(X) / float(config.batch_size)))
     data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, False)
@@ -41,11 +41,7 @@ def dev_predict(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
-		    Y=Y_in,
-                    Y_length=Y_length_in,
-                    Y_mask=Y_mask_in,
-                    dropout=1,
-                    mode=False
+                    dropout=1
                     )
 
         batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
@@ -58,10 +54,10 @@ def save_predictions(
             filename,
             X,
             X_length,
-            Y,
-            Y_length,
             s_num_to_char,
-            t_num_to_char
+            t_num_to_char,
+            Y=None,
+            Y_length=None
             ):
 
     """Saves predictions to the provided file."""
@@ -76,28 +72,36 @@ def save_predictions(
                 p_to_file = ""
                 p_end = False
                 for char_index in range(config.max_length):
+
                     #not considering the end sign
                     if(char_index < X_length[ad] - 1):
                         s_to_file += str(s_num_to_char[X[ad][char_index]].encode('utf8'))
-		    print s_to_file
-                    #if(str(t_num_to_char[predictions[ad][char_index]])!="_" and p_end==False):
-                    #    p_to_file += str(t_num_to_char[predictions[ad][char_index]])
-                    #else: p_end = True
+
+                    if(str(t_num_to_char[predictions[ad][char_index]].encode('utf8'))!="#" and p_end==False):
+                        p_to_file += str(t_num_to_char[predictions[ad][char_index]].encode('utf8'))
+                    else: p_end = True
 
                     if Y is not None:
                         if(char_index < Y_length[ad] - 1):
                             t_to_file += str(t_num_to_char[Y[ad][char_index]].encode('utf8'))
 
-                to_file = s_to_file + "\t" + t_to_file + "\t" + p_to_file+ "\n"
+                if Y is not None:
+                    to_file = s_to_file + "\t" + t_to_file + "\t" + p_to_file+ "\n"
+                else:
+                    to_file = p_to_file+ "\n"
+
+                #replace nill with nothing
+                to_file = to_file.replace("_", "")
+
                 f.write(to_file)
     return
 
 #Recursive Levenshtein Function in Python
 def LD(y1, y2):
-    if y1 == "":
+    if len(y1) == 0:
         return len(y2)
 
-    if y2 == "":
+    if len(y2) == 0:
         return len(y1)
 
     if y1[-1] == y2[-1]:
@@ -105,23 +109,26 @@ def LD(y1, y2):
     else:
         cost = 1
 
-    dist = min([LD(y1[:-1], y2)+ 1,
-               LD(y1, y2[:-1])+ 1,
-               LD(y1[:-1], y2[:-1]) + cost])
+    dist = min([LD(y1[:-1], y2)+ 1, LD(y1, y2[:-1])+ 1, LD(y1[:-1], y2[:-1]) + cost])
     return dist
 
-def evaluate():
-    with open('temp.predicted', "r") as f:
+def avg_edit_distance(fileName):
+    with open(fileName, "r") as f:
         lines = f.readlines()
         dist = 0.0
         for each in lines:
             each = each.strip()
             line = each.split("\t")
-            if len(line)==2:
-                dist += LD(line[1], line[2])
+            if len(line)==3:
+                ref = list(line[1].decode('utf8'))
+                pred = list(line[2].decode('utf8'))
+                ref = [x for x in ref if x != u'\u200c']
+                pred = [x for x in pred if x != u'\u200c']
+                dist += LD(ref, pred)
             else:
                 print "Wrong input file format for evaluating!"
                 exit()
+
         cost = float(dist/len(lines))
     return cost
 
@@ -159,14 +166,14 @@ def run(mode):
                                     data['train_data']['Y_mask']
                                     )
 
-                predictions = dev_predict(
+                predictions = predict(
                                      config,
                                      model,
                                      session,
                                      data['dev_data']['X'],
                                      data['dev_data']['X_length'],
                                      data['dev_data']['X_mask'],
-				     data['train_data']['Y'],
+                                     data['train_data']['Y'],
                                      data['train_data']['Y_length'],
                                      data['train_data']['Y_mask']
                                      )
@@ -178,13 +185,13 @@ def run(mode):
                                 "temp.predicted",
                                 data['dev_data']['X'],
                                 data['dev_data']['X_length'],
-                                data['dev_data']['Y'],
-                                data['dev_data']['Y_length'],
                                 data['s_num_to_char'],
-                                data['t_num_to_char']
+                                data['t_num_to_char'],
+                                data['dev_data']['Y'],
+                                data['dev_data']['Y_length']
                                 )
 
-                dev_cost = evaluate()
+                dev_cost = avg_edit_distance()
                 print 'Validation cost: {}'.format(dev_cost)
 
                 if  dev_cost < best_dev_cost:
@@ -226,8 +233,6 @@ def run(mode):
                             "test.predicted",
                             data['test_data']['X'],
                             data['test_data']['X_length'],
-                            None,
-                            None,
                             data['s_num_to_char'],
                             data['t_num_to_char']
                             )

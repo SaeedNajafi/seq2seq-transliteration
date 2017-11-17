@@ -154,6 +154,11 @@ def run(mode):
                 print
                 print 'Epoch {}'.format(epoch)
 
+                #manually reseting adam optimizer
+                if(epoch%6==5):
+                    optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+                    session.run(tf.variables_initializer(optimizer_scope))
+
                 start = time.time()
                 train_loss = train(
                                     config,

@@ -17,7 +17,7 @@ class Configuration(object):
     max_length = 32
     h_units = 32
 
-    batch_size = 16
+    batch_size = 8
     #current batch_size
     b_size = None
 
@@ -25,7 +25,7 @@ class Configuration(object):
     learning_rate = 0.0005
     max_gradient_norm = 5.
     max_epochs = 50
-    early_stopping = 3
+    early_stopping = 5
 
     #inference='crf'
     inference='reinforced-decoder-rnn'

@@ -3,8 +3,8 @@ import xml.etree.ElementTree
 
 ft = open('mytrain.txt', 'w')
 fd = open('mydev.txt', 'w')
-f_source = open('source.txt', 'a')
-f_target = open('target.txt', 'a')
+f_source = open('source.txt', 'w')
+f_target = open('target.txt', 'w')
 source_lst = []
 target_lst = []
 f = None

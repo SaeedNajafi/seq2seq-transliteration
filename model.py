@@ -14,7 +14,9 @@ class Model(object):
         H = self.encoder(s_embed, config)
 
         M = self.decoder(H, t_embed, config)
-        
+
+        self.outputs = self.greedy_decoding(H, config)
+
         self.loss = tf.contrib.seq2seq.sequence_loss(
                                     logits=M,
                                     targets=self.Y_placeholder,
@@ -55,10 +57,12 @@ class Model(object):
             self.X_length_placeholder: X_length,
             self.X_mask_placeholder: X_mask,
             self.dropout_placeholder: dropout
-            self.Y_placeholder: Y,
-            self.Y_length_placeholder: Y_length,
-            self.Y_mask_placeholder: Y_mask
             }
+        
+        if Y is not None:
+            feed_dict[self.Y_placeholder] = Y
+            feed_dict[self.Y_length_placeholder] = Y_length
+            feed_dict[self.Y_mask_placeholder] = Y_mask
 
         return feed_dict
 
@@ -268,6 +272,42 @@ class Model(object):
             M = tf.stack(M, axis=1)
 
         return M
+
+    def greedy_decoding(self, H, config):
+
+        """Reload softmax prediction layer"""
+        with tf.variable_scope("softmax", reuse=True):
+            U_softmax = tf.get_variable("W_softmax")
+            b_softmax = tf.get_variable("b_softmax")
+
+        #reloading the target embedding layer.
+        with tf.variable_scope("t_embeddings", reuse=True):
+            t_lookup_table = tf.get_variable("t_lookup_table")
+
+
+        GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
+        initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
+        H_tra = tf.transpose(H, [1,0,2])
+
+        outputs = []
+        with tf.variable_scope("decoder_rnn", reuse=True) as scope:
+            for time_index in range(config.max_sentence_length):
+                if time_index==0:
+                    output, state = self.decoder_lstm_cell(GO_symbol, initial_state)
+                else:
+                    output, state = self.decoder_lstm_cell(prev_output, state)
+
+                output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
+                H_and_output = tf.concat([H_tra[time_index], output_dropped], axis=1)
+                m = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
+                probs = tf.nn.softmax(m)
+                predicted_indices = tf.argmax(probs, axis=1)
+                outputs.append(predicted_indices)
+                prev_output = tf.nn.embedding_lookup(t_lookup_table, predicted_indices)
+
+            outputs = tf.stack(outputs, axis=1)
+
+        return outputs
 
     def add_training_op(self, loss, config):
         """Sets up the training Ops.

@@ -32,4 +32,4 @@ class Configuration(object):
 
     #decoding = 'greedy'
     decoding = 'beamsearch'
-    beamsize = 4
+    beamsize = 2

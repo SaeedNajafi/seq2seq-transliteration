@@ -30,6 +30,6 @@ class Configuration(object):
     #inference='crf'
     inference='reinforced-decoder-rnn'
 
-    decoding = 'greedy'
-    #decoding = 'beamsearch'
-    #beamsize = 5
+    #decoding = 'greedy'
+    decoding = 'beamsearch'
+    beamsize = 1

@@ -24,7 +24,7 @@ class Configuration(object):
     dropout = 0.5
     learning_rate = 0.0005
     max_gradient_norm = 5.
-    max_epochs = 10
+    max_epochs = 100
     early_stopping = 5
 
     #inference='crf'

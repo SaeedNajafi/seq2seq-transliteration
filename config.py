@@ -17,7 +17,7 @@ class Configuration(object):
     max_length = 32
     h_units = 32
 
-    batch_size = 8
+    batch_size = 4
     #current batch_size
     b_size = None
 
@@ -32,4 +32,4 @@ class Configuration(object):
 
     decoding = 'greedy'
     #decoding = 'beamsearch'
-    #beamsize = 5
+    #beamsize = 2

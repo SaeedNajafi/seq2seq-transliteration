@@ -1,26 +1,16 @@
-import xml.etree.ElementTree
-
-pred = open('test.predicted', 'r')
-e = xml.etree.ElementTree.parse('./data/EnPe/dev.xml').getroot()
+pred_lines = open('test.predicted', 'r').readlines()
+ref_lines = open('./data/EnPe/corrected_dev.txt', 'r').readlines()
 total_source = 0.0
 total_correct = 0.0
-preds = pred.readlines()
 index = 0
-for name in e.findall('Name'):
-    pred_target = preds[index].strip()
+for ref in ref_lines:
+    pred_target = pred_lines[index].strip()
     total_source += 1
-
-    for target in name.findall('TargetName'):
-        print(list(target.text))
-        print(list(pred_target))
-        print(list(target.text.encode('utf-8')))
-        print(list(pred_target.encode('utf-8')))
-        if target.text.strip() == pred_target.strip():
-            print("TRUE")
+    ref_tg_list = ref.strip().split(" ")[1:]
+    for target in ref_tg_list:
+        if target == pred_target:
             total_correct += 1
             break
-        else:
-            print ("FALSE")
-
     index += 1
+
 print ((total_correct/total_source)*100)

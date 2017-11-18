@@ -386,7 +386,7 @@ class Model(object):
                         next_c = H_tra[time_index + 1]
 
                     C_and_output = tf.concat([prev_c, curr_c, next_c, output], axis=1)
-                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
 
                     '''
                     H_and_output = tf.concat([H_tra[time_index], output], axis=1)
@@ -434,7 +434,7 @@ class Model(object):
                             next_c = H_tra[time_index + 1]
 
                         C_and_output = tf.concat([prev_c, curr_c, next_c, output], axis=1)
-                        m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                        pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
 
                         '''
                         H_and_output = tf.concat([H_tra[time_index], output], axis=1)

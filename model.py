@@ -281,7 +281,6 @@ class Model(object):
                 else:
                     prev_c = H_tra[time_index - 1]
                     next_c = H_tra[time_index + 1]
-                
                 C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
                 m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
 
@@ -314,7 +313,6 @@ class Model(object):
                     output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     output, state = self.decoder_lstm(prev_output, state)
-                
                 #local attention
                 prev_c = H_tra[time_index] - H_tra[time_index]
                 next_c = H_tra[time_index] - H_tra[time_index]
@@ -326,10 +324,8 @@ class Model(object):
                 else:
                     prev_c = H_tra[time_index - 1]
                     next_c = H_tra[time_index + 1]
-                
-                C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                C_and_output = tf.concat([prev_c, curr_c, next_c, output], axis=1)
                 m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                
                 #without attention
                 '''
                 H_and_output = tf.concat([H_tra[time_index], output], axis=1)
@@ -372,7 +368,6 @@ class Model(object):
             for time_index in range(config.max_length):
                 if time_index==0:
                     output, (c_state, m_state) = self.decoder_lstm(GO_symbol, initial_state)
-                    
                     #local attention
                     prev_c = H_tra[time_index] - H_tra[time_index]
                     next_c = H_tra[time_index] - H_tra[time_index]
@@ -384,8 +379,7 @@ class Model(object):
                     else:
                         prev_c = H_tra[time_index - 1]
                         next_c = H_tra[time_index + 1]
-                    
-                    C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                    C_and_output = tf.concat([prev_c, curr_c, next_c, output], axis=1)
                     m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
 
                     '''
@@ -432,8 +426,7 @@ class Model(object):
                         else:
                             prev_c = H_tra[time_index - 1]
                             next_c = H_tra[time_index + 1]
-                    
-                        C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                        C_and_output = tf.concat([prev_c, curr_c, next_c, output], axis=1)
                         m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
 
                         '''

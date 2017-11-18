@@ -14,7 +14,7 @@ def load(config, mode):
     lines = f.readlines()
     for line in lines:
         s_chars.append(line.decode('utf8').strip())
-    
+
     s_chars.append("#")
 
     config.s_alphabet_size = len(s_chars)

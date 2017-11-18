@@ -25,9 +25,6 @@ def load(config, mode):
     for line in lines:
         t_chars.append(line.decode('utf8').strip())
 
-    #nill character
-    t_chars.append("_")
-
     #end of token
     t_chars.append("#")
 

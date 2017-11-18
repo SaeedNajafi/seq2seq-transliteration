@@ -24,12 +24,12 @@ class Configuration(object):
     dropout = 0.5
     learning_rate = 0.0005
     max_gradient_norm = 5.
-    max_epochs = 50
+    max_epochs = 10
     early_stopping = 5
 
     #inference='crf'
     inference='reinforced-decoder-rnn'
 
-    #decoding = 'greedy'
-    decoding = 'beamsearch'
-    beamsize = 2
+    decoding = 'greedy'
+    #decoding = 'beamsearch'
+    #beamsize = 2

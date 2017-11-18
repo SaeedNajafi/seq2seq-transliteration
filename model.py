@@ -227,7 +227,7 @@ class Model(object):
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(
                             "W_softmax",
-                            (2 * config.h_units, config.t_alphabet_size),
+                            (4 * config.h_units, config.t_alphabet_size),
                             tf.float32,
                             self.xavier_initializer
                             )
@@ -269,8 +269,27 @@ class Model(object):
                     output, state = self.decoder_lstm(t_embed_tra[time_index-1], state)
 
                 output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
+
+                #local attention
+                prev_c = H_tra[time_index] - H_tra[time_index]
+                next_c = H_tra[time_index] - H_tra[time_index]
+                curr_c = H_tra[time_index]
+                if time_index==0:
+                    next_c = H_tra[time_index + 1]
+                elif time_index==config.max_length-1:
+                    prev_c = H_tra[time_index - 1]
+                else:
+                    prev_c = H_tra[time_index - 1]
+                    next_c = H_tra[time_index + 1]
+                
+                C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+
+                #without attention
+                '''
                 H_and_output = tf.concat([H_tra[time_index], output_dropped], axis=1)
                 m = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
+                '''
                 M.append(m)
 
             M = tf.stack(M, axis=1)
@@ -295,10 +314,28 @@ class Model(object):
                     output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     output, state = self.decoder_lstm(prev_output, state)
-
-                output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
-                H_and_output = tf.concat([H_tra[time_index], output_dropped], axis=1)
+                
+                #local attention
+                prev_c = H_tra[time_index] - H_tra[time_index]
+                next_c = H_tra[time_index] - H_tra[time_index]
+                curr_c = H_tra[time_index]
+                if time_index==0:
+                    next_c = H_tra[time_index + 1]
+                elif time_index==config.max_length-1:
+                    prev_c = H_tra[time_index - 1]
+                else:
+                    prev_c = H_tra[time_index - 1]
+                    next_c = H_tra[time_index + 1]
+                
+                C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                
+                #without attention
+                '''
+                H_and_output = tf.concat([H_tra[time_index], output], axis=1)
                 m = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
+                '''
+
                 probs = tf.nn.softmax(m)
                 predicted_indices = tf.argmax(probs, axis=1)
                 outputs.append(predicted_indices)
@@ -314,7 +351,6 @@ class Model(object):
         with tf.variable_scope("softmax", reuse=True):
             W_softmax = tf.get_variable("W_softmax")
             b_softmax = tf.get_variable("b_softmax")
-
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
@@ -336,8 +372,26 @@ class Model(object):
             for time_index in range(config.max_length):
                 if time_index==0:
                     output, (c_state, m_state) = self.decoder_lstm(GO_symbol, initial_state)
+                    
+                    #local attention
+                    prev_c = H_tra[time_index] - H_tra[time_index]
+                    next_c = H_tra[time_index] - H_tra[time_index]
+                    curr_c = H_tra[time_index]
+                    if time_index==0:
+                        next_c = H_tra[time_index + 1]
+                    elif time_index==config.max_length-1:
+                        prev_c = H_tra[time_index - 1]
+                    else:
+                        prev_c = H_tra[time_index - 1]
+                        next_c = H_tra[time_index + 1]
+                    
+                    C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+
+                    '''
                     H_and_output = tf.concat([H_tra[time_index], output], axis=1)
                     pred = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
+                    '''
                     predictions = tf.nn.softmax(pred)
                     probs, indices = tf.nn.top_k(predictions, k=config.beamsize, sorted=True)
                     prev_indices = indices
@@ -367,8 +421,26 @@ class Model(object):
                                                         (prev_c_states_t[b],prev_m_states_t[b])
                                                         )
 
+                        #local attention
+                        prev_c = H_tra[time_index] - H_tra[time_index]
+                        next_c = H_tra[time_index] - H_tra[time_index]
+                        curr_c = H_tra[time_index]
+                        if time_index==0:
+                            next_c = H_tra[time_index + 1]
+                        elif time_index==config.max_length-1:
+                            prev_c = H_tra[time_index - 1]
+                        else:
+                            prev_c = H_tra[time_index - 1]
+                            next_c = H_tra[time_index + 1]
+                    
+                        C_and_output = tf.concat([prev_c, curr_c, next_c, output_dropped], axis=1)
+                        m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+
+                        '''
                         H_and_output = tf.concat([H_tra[time_index], output], axis=1)
                         pred = tf.add(tf.matmul(H_and_output, W_softmax), b_softmax)
+                        '''
+
                         predictions = tf.nn.softmax(pred)
                         probs, indices = tf.nn.top_k(predictions, k=config.beamsize, sorted=True)
                         probs_t = tf.transpose(probs, [1,0])

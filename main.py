@@ -91,8 +91,6 @@ def save_predictions(
                 else:
                     to_file = p_to_file+ "\n"
 
-                #replace nill with nothing
-                #to_file = to_file.replace("_", "")
 
                 f.write(to_file)
     return

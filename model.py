@@ -14,21 +14,18 @@ class Model(object):
         C = self.encoder(s_embed, config)
         
         if config.inference=='reinforced-decoder-rnn':
-            M = self.decoder(C, t_embed, config)
-
+            
+            self.reinforced_decoder(C, t_embed, config)
+            
+            with tf.variable_scope("baseline_adam_optimizer"):
+                self.baseline_train_op = tf.train.AdamOptimizer(config.learning_rate).minimize(self.baseline_loss)
+            
             if config.decoding=='greedy':
                 self.outputs = self.greedy_decoding(C, config)
 
             elif config.decoding=='beamsearch':
                 self.outputs = self.beam_decoding(C, config)
-
-            self.loss = tf.contrib.seq2seq.sequence_loss(
-                                        logits=M,
-                                        targets=self.Y_placeholder,
-                                        weights=self.Y_mask_placeholder,
-                                        average_across_timesteps=True,
-                                        average_across_batch=True
-                                        )
+    
         elif config.inference=='crf':
             self.crf_decoder(C, config)
             self.loss = tf.reduce_mean(-self.crf_log_likelihood)
@@ -50,9 +47,10 @@ class Model(object):
         self.Y_length_placeholder = tf.placeholder(tf.int32, shape=(None,))
         self.Y_mask_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, config.max_length))
         self.dropout_placeholder = tf.placeholder(dtype=tf.float32, shape=())
+        self.pretrain_placeholder = tf.placeholder(dtype=tf.bool, shape=())
         return
 
-    def create_feed_dict(self, X, X_length, X_mask, dropout, Y=None, Y_length=None, Y_mask=None):
+    def create_feed_dict(self, X, X_length, X_mask, dropout, pretrain, Y=None, Y_length=None, Y_mask=None):
         """Creates the feed_dict.
         A feed_dict takes the form of:
         feed_dict = {
@@ -65,7 +63,8 @@ class Model(object):
             self.X_placeholder: X,
             self.X_length_placeholder: X_length,
             self.X_mask_placeholder: X_mask,
-            self.dropout_placeholder: dropout
+            self.dropout_placeholder: dropout,
+            self.pretrain_placeholder: pretrain
             }
 
         if Y is not None:
@@ -268,12 +267,13 @@ class Model(object):
     
         self.M = tf.reshape(M, (-1, config.max_length, config.t_alphabet_size))
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(
-                                                                                        self.M,
-                                                                                        self.Y_placeholder,
-                                                                                        self.Y_length_placeholder - self.Y_length_placeholder + config.max_length
-                                                                                        )
+                                                                    self.M,
+                                                                    self.Y_placeholder,
+                                                                    self.Y_length_placeholder - self.Y_length_placeholder + config.max_length
+                                                                    )
         return
-    def decoder(self, C, t_embed, config):
+        
+    def reinforced_decoder(self, C, t_embed, config):
 
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
@@ -287,6 +287,35 @@ class Model(object):
             b_softmax = tf.get_variable(
                             "b_softmax",
                             (config.t_alphabet_size,),
+                            tf.float32,
+                            tf.constant_initializer(0.0)
+                            )
+        
+        with tf.variable_scope("baseline"):
+            W1_baseline = tf.get_variable(
+                            "W1_baseline",
+                            (4 * config.h_units, 32),
+                            tf.float32,
+                            self.xavier_initializer
+                            )
+                
+            b1_baseline = tf.get_variable(
+                            "b1_baseline",
+                            (32,),
+                            tf.float32,
+                            tf.constant_initializer(0.0)
+                            )
+                                          
+            W2_baseline = tf.get_variable(
+                            "W2_baseline",
+                            (32, 1),
+                            tf.float32,
+                            self.xavier_initializer
+                            )
+                                          
+            b2_baseline = tf.get_variable(
+                            "b2_baseline",
+                            (1,),
                             tf.float32,
                             tf.constant_initializer(0.0)
                             )
@@ -310,28 +339,103 @@ class Model(object):
         t_embed_tra = tf.transpose(t_embed, [1,0,2])
         C_tra = tf.transpose(C, [1,0,2])
 
-        M = []
-        with tf.variable_scope('decoder_rnn') as scope:
-            initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
-            for time_index in range(config.max_length):
-                if time_index==0:
-                    output, state = self.decoder_lstm(GO_symbol, initial_state)
-                else:
-                    scope.reuse_variables()
-                    output, state = self.decoder_lstm(t_embed_tra[time_index-1], state)
+        def maximum_likelihood():
+            M = []
+            with tf.variable_scope('decoder_rnn') as scope:
+                initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
+                for time_index in range(config.max_length):
+                    if time_index==0:
+                        output, state = self.decoder_lstm(GO_symbol, initial_state)
+                    else:
+                        scope.reuse_variables()
+                        output, state = self.decoder_lstm(t_embed_tra[time_index-1], state)
 
-                output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
+                    output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
 
 
-                C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
-                m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                
-                M.append(m)
-        
+                    C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
+                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    
+                    M.append(m)
+            
             M = tf.stack(M, axis=1)
+            cross_entropy_loss = tf.contrib.seq2seq.sequence_loss(
+                                                        logits=M,
+                                                        targets=self.Y_placeholder,
+                                                        weights=self.Y_mask_placeholder,
+                                                        average_across_timesteps=True,
+                                                        average_across_batch=True
+                                                        )
+                
+            #b2_baseline is just a dummy loss added for coding purpose.
+            return cross_entropy_loss, b2_baseline
+                
+        def actor_critic():
+            Policies = []
+            Baselines = []
+            with tf.variable_scope('decoder_rnn') as scope:
+                initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
+                for time_index in range(config.max_length):
+                    if time_index==0:
+                        output, state = self.decoder_lstm(GO_symbol, initial_state)
+                    else:
+                        scope.reuse_variables()
+                        output, state = self.decoder_lstm(prev_output, state)
 
-        return M
+                    output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
 
+                    C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
+
+                    
+                    #forward pass for the baseline estimation
+                    baseline = tf.add(tf.matmul(tf.stop_gradient(C_and_output), W1_baseline), b1_baseline)
+                    baseline = tf.add(tf.matmul(baseline, W2_baseline), b2_baseline)
+                    Baselines.append(baseline)
+                    
+                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    policy = tf.nn.softmax(m)
+                    prev_output = tf.matmul(tf.nn.softmax(10000.0 * m), self.t_lookup_table)
+                    Policies.append(policy)
+
+            Policies = tf.stack(Policies, axis=1)
+            Baselines = tf.stack(Baselines, axis=1)
+
+            Baselines = tf.reshape(Baselines, (-1, config.max_sentence_length))
+    
+            is_true_tag = tf.cast(tf.equal(tf.cast(self.Y_placeholder, tf.int64), tf.argmax(Policies, axis=2)), tf.float32)
+            Rewards = 2 * is_true_tag - 1.0
+            Rewards = tf.multiply(Rewards, self.Y_mask_placeholder)
+            Baselines = tf.multiply(Baselines, self.Y_mask_placeholder)
+            
+            Rewards_t = tf.transpose(Rewards, [1,0])
+            Baselines_t = tf.transpose(Baselines, [1,0])
+            Returns = []
+            
+            zeros = tf.cast(self.Y_length_placeholder - self.Y_length_placeholder, tf.float32)
+            for t in range(config.max_length):
+                ret = zeros
+                if t < config.max_length - config.n_step:
+                    for i in range(config.n_step):
+                        ret += (config.gamma ** i) * Rewards_t[t + i]
+                        if i == config.n_step - 1:
+                            ret += (config.gamma ** config.n_step) * Baselines_t[t + config.n_step]
+            
+                Returns.append(ret)
+
+            Returns = tf.stack(Returns, axis=1)
+
+            Objective = tf.log(tf.reduce_max(Policies, axis=2)) * tf.stop_gradient(Returns - Baselines)
+            Objective_masked = tf.multiply(Objective, self.Y_mask_placeholder)
+            
+            baseline_loss = tf.reduce_mean(tf.pow(tf.stop_gradient(Returns) - Baselines, 2) * self.Y_mask_placeholder) / 2.0
+            
+            actor_loss = -tf.reduce_mean(Objective_masked)
+            return actor_loss, baseline_loss
+            
+        self.loss, self.baseline_loss = tf.cond(self.pretrain_placeholder, maximum_likelihood, actor_critic)
+    
+        return
+    
     def greedy_decoding(self, C, config):
 
         """Reload softmax prediction layer"""

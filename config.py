@@ -26,9 +26,12 @@ class Configuration(object):
     max_gradient_norm = 5.
     max_epochs = 100
     early_stopping = 5
+    random_seed = 11
 
     inference='crf'
     #inference='reinforced-decoder-rnn'
+    gamma = 0.6
+    n_step = 5
 
     #decoding = 'greedy'
     #decoding = 'beamsearch'

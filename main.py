@@ -7,10 +7,11 @@ import sys
 import time
 import os
 
-def train(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
+def train(config, model, session, X, X_length, X_mask, pretrain, Y, Y_length, Y_mask):
 
     # We're interested in keeping track of the loss during training
     total_loss = []
+    baseline_total_loss = []
     total_steps = int(np.ceil(len(X) / float(config.batch_size)))
     data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, True)
     for step, (X_in, X_length_in, X_mask_in, Y_in, Y_length_in, Y_mask_in) in enumerate(data):
@@ -19,18 +20,39 @@ def train(config, model, session, X, X_length, X_mask, Y, Y_length, Y_mask):
                     X_length=X_length_in,
                     X_mask=X_mask_in,
                     dropout=config.dropout,
+                    pretrain=pretrain,
                     Y=Y_in,
                     Y_length=Y_length_in,
                     Y_mask=Y_mask_in
                     )
-        loss , _ = session.run([model.loss, model.train_op], feed_dict=feed)
-        total_loss.append(loss)
+        
+        if pretrain:
+            loss , _ = session.run([model.loss, model.train_op], feed_dict=feed)
+            total_loss.append(loss)
 
-        ##
-        sys.stdout.write('\r{} / {} : loss = {}'.format(step, total_steps, np.mean(total_loss)))
-        sys.stdout.flush()
+            ##
+            sys.stdout.write('\r{} / {} : loss = {}'.format(step, total_steps, np.mean(total_loss)))
+            sys.stdout.flush()
 
-    return np.mean(total_loss)
+        else:
+            baseline_loss, loss, _, _ = session.run([model.baseline_loss, model.loss, model.baseline_train_op, model.train_op], feed_dict=feed)
+            total_loss.append(loss)
+            baseline_total_loss.append(baseline_loss)
+            
+            ##
+            sys.stdout.write('\r{} / {} : loss = {} | baseline_loss = {}'.format(
+                                                                            step,
+                                                                            total_steps,
+                                                                            np.mean(total_loss),
+                                                                            np.mean(baseline_total_loss)
+                                                                        )
+                             )
+            sys.stdout.flush()
+    
+    if pretrain:
+        return np.mean(total_loss), 0
+    else:
+        return np.mean(total_loss), np.mean(baseline_total_loss)
 
 def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, Y_mask=None):
     results = []
@@ -41,7 +63,8 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
-                    dropout=1
+                    dropout=1,
+                    pretrain=True
                     )
         
         if config.inference=='reinforced-decoder-rnn':
@@ -168,6 +191,7 @@ def run(mode):
     """run the model's implementation.
     """
     config = Configuration()
+    np.random.seed(config.random_seed)
     data = ut.load(config, mode)
     model = Model(config)
 
@@ -176,27 +200,43 @@ def run(mode):
 
     with tf.Session() as session:
         session.run(init)
+        tf.set_random_seed(config.random_seed)
 
         if mode=='train':
             best_dev_cost = float('inf')
             best_dev_epoch = 0
             first_start = time.time()
+            
+            pretrain = True
+            #saver.restore(session, './rnn/exp1/pretrain_weights/weights')
+            #optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            #session.run(tf.variables_initializer(optimizer_scope))
+            
             for epoch in xrange(config.max_epochs):
                 print
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
-                train_loss = train(
-                                    config,
-                                    model,
-                                    session,
-                                    data['train_data']['X'],
-                                    data['train_data']['X_length'],
-                                    data['train_data']['X_mask'],
-                                    data['train_data']['Y'],
-                                    data['train_data']['Y_length'],
-                                    data['train_data']['Y_mask']
-                                    )
+                
+                '''
+                if epoch==0 or epoch%3!=0:
+                    pretrain=False
+                else:
+                    pretrain=True
+                '''
+                
+                train_loss, baseline_train_loss = train(
+                                                    config,
+                                                    model,
+                                                    session,
+                                                    data['train_data']['X'],
+                                                    data['train_data']['X_length'],
+                                                    data['train_data']['X_mask'],
+                                                    pretrain,
+                                                    data['train_data']['Y'],
+                                                    data['train_data']['Y_length'],
+                                                    data['train_data']['Y_mask']
+                                                    )
 
                 predictions = predict(
                                      config,
@@ -211,6 +251,7 @@ def run(mode):
                                      )
 
                 print '\rTraining loss: {}'.format(train_loss)
+                if not pretrain and config.inference=="reinforced_decoder_rnn": print '\nBaseline Training loss: {}'.format(baseline_train_loss)
                 save_predictions(
                                 config,
                                 predictions,
@@ -222,19 +263,19 @@ def run(mode):
                                 data['dev_data']['Y'],
                                 data['dev_data']['Y_length']
                                 )
-                if epoch>20:
-                    dev_cost = 100 - accuracy("temp.predicted")
-                    print 'Validation cost: {}'.format(dev_cost)
-                    if  dev_cost < best_dev_cost:
-                        best_dev_cost = dev_cost
-                        best_dev_epoch = epoch
-                        if not os.path.exists("./weights"):
-                            os.makedirs("./weights")
-                        saver.save(session, './weights/weights')
-                    # For early stopping which is kind of regularization for network.
-                    if epoch - best_dev_epoch > config.early_stopping:
-                        break
-                        ###
+                    
+                dev_cost = 100 - accuracy("temp.predicted")
+                print 'Validation cost: {}'.format(dev_cost)
+                if  dev_cost < best_dev_cost:
+                    best_dev_cost = dev_cost
+                    best_dev_epoch = epoch
+                    if not os.path.exists("./weights"):
+                        os.makedirs("./weights")
+                    saver.save(session, './weights/weights')
+                # For early stopping which is kind of regularization for network.
+                if epoch - best_dev_epoch > config.early_stopping:
+                    break
+                    ###
                         
                 print 'Epoch training time: {} seconds'.format(time.time() - start)
 

@@ -14,7 +14,7 @@ class Configuration(object):
     t_embedding_size = 16
     t_alphabet_size = None
 
-    max_length = 24
+    max_length = 32
     h_units = 32
 
     batch_size = 4

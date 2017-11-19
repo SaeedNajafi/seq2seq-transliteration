@@ -222,8 +222,8 @@ def run(mode):
                                 data['dev_data']['Y'],
                                 data['dev_data']['Y_length']
                                 )
-                if epoch>2:
-                    dev_cost = 100.0 - accuracy("temp.predicted")
+                if epoch>20:
+                    dev_cost = 100 - accuracy("temp.predicted")
                     print 'Validation cost: {}'.format(dev_cost)
                     if  dev_cost < best_dev_cost:
                         best_dev_cost = dev_cost

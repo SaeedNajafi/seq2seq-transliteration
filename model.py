@@ -270,7 +270,7 @@ class Model(object):
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(
                                                                                         self.M,
                                                                                         self.Y_placeholder,
-                                                                                        self.Y_length_placeholder
+                                                                                        self.Y_length_placeholder - self.Y_length_placeholder + config.max_length
                                                                                         )
         return
     def decoder(self, C, t_embed, config):

@@ -43,9 +43,21 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
                     X_mask=X_mask_in,
                     dropout=1
                     )
-
-        batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
-        results.append(batch_predicted_indices[0])
+        
+        if config.inference=='reinforced-decoder-rnn':
+            batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
+            results.append(batch_predicted_indices[0])
+    
+        elif config.inference=='crf':
+            unary_scores, transition_params = session.run([model.M, model.crf_transition_params], feed_dict=feed)
+            batch_results = []
+            for unary_scores_each in unary_scores:
+                # Compute the highest score and its tag sequence.
+                viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(unary_scores_each, transition_params)
+                predicted_indices = viterbi_sequence
+                batch_results.append(predicted_indices)
+            
+            results.append(batch_results)    
     return results
 
 def save_predictions(
@@ -97,10 +109,10 @@ def save_predictions(
 
 #Recursive Levenshtein Function in Python
 def LD(y1, y2):
-    if len(y1) == 0:
+    if y1 is None or len(y1) == 0:
         return len(y2)
 
-    if len(y2) == 0:
+    if y2 is None or len(y2) == 0:
         return len(y1)
 
     if y1[-1] == y2[-1]:
@@ -130,6 +142,27 @@ def avg_edit_distance(fileName):
 
         cost = float(dist/len(lines))
     return cost
+
+def accuracy(fileName):
+    pred_lines = open(fileName, 'r').readlines()
+    total_source = 0.0
+    total_correct = 0.0
+    for each in pred_lines:
+        each = each.strip()
+        line = each.split("\t")
+        if len(line)==3:
+            ref = list(line[1].decode('utf8'))
+            pred = list(line[2].decode('utf8'))
+            ref = [x for x in ref if x != u'\u200c']
+            pred = [x for x in pred if x != u'\u200c']
+            total_source += 1
+            if ref == pred:
+                total_correct += 1
+        else:
+            print "Wrong input file format for evaluating!"
+            exit()
+
+    return (total_correct/total_source)*100
 
 def run(mode):
     """run the model's implementation.
@@ -189,22 +222,20 @@ def run(mode):
                                 data['dev_data']['Y'],
                                 data['dev_data']['Y_length']
                                 )
-
-                dev_cost = avg_edit_distance("temp.predicted")
-                print 'Validation cost: {}'.format(dev_cost)
-
-                if  dev_cost < best_dev_cost:
-                    best_dev_cost = dev_cost
-                    best_dev_epoch = epoch
-                    if not os.path.exists("./weights"):
-                    	os.makedirs("./weights")
-                    saver.save(session, './weights/weights')
-
-                # For early stopping which is kind of regularization for network.
-                if epoch - best_dev_epoch > config.early_stopping:
-                    break
-                    ###
-
+                if epoch>2:
+                    dev_cost = 100.0 - accuracy("temp.predicted")
+                    print 'Validation cost: {}'.format(dev_cost)
+                    if  dev_cost < best_dev_cost:
+                        best_dev_cost = dev_cost
+                        best_dev_epoch = epoch
+                        if not os.path.exists("./weights"):
+                            os.makedirs("./weights")
+                        saver.save(session, './weights/weights')
+                    # For early stopping which is kind of regularization for network.
+                    if epoch - best_dev_epoch > config.early_stopping:
+                        break
+                        ###
+                        
                 print 'Epoch training time: {} seconds'.format(time.time() - start)
 
             print 'Total training time: {} seconds'.format(time.time() - first_start)

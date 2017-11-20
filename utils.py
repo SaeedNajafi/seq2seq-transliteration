@@ -25,7 +25,7 @@ def load(config, mode):
     for line in lines:
         t_chars.append(line.decode('utf8').strip())
 
-    #end of token
+    #end token
     t_chars.append("#")
 
     config.t_alphabet_size = len(t_chars)

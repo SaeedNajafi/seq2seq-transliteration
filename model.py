@@ -12,24 +12,24 @@ class Model(object):
         s_embed, t_embed = self.embeddings(config)
 
         C = self.encoder(s_embed, config)
-        
+
         if config.inference=='reinforced-decoder-rnn':
-            
+
             self.reinforced_decoder(C, t_embed, config)
-            
+
             with tf.variable_scope("baseline_adam_optimizer"):
                 self.baseline_train_op = tf.train.AdamOptimizer(config.learning_rate).minimize(self.baseline_loss)
-            
+
             if config.decoding=='greedy':
                 self.outputs = self.greedy_decoding(C, config)
 
             elif config.decoding=='beamsearch':
                 self.outputs = self.beam_decoding(C, config)
-    
+
         elif config.inference=='crf':
             self.crf_decoder(C, config)
             self.loss = tf.reduce_mean(-self.crf_log_likelihood)
-        
+
         self.train_op = self.add_training_op(self.loss, config)
 
         return
@@ -222,8 +222,8 @@ class Model(object):
                     )
             H = tf.tanh(H)
             H = tf.reshape(H, (-1, config.max_length, config.h_units))
-            
-            #local soft attention | window based local attention
+
+            #local soft attention | window-based local attention
             C = []
             H_tra = tf.transpose(H, [1,0,2])
             for time_index in range(config.max_length):
@@ -237,15 +237,15 @@ class Model(object):
                 else:
                     prev_c = H_tra[time_index - 1]
                     next_c = H_tra[time_index + 1]
-                
+
                 c = tf.concat([prev_c, curr_c, next_c], axis=1)
                 C.append(c)
-            
+
             C = tf.stack(C, axis=1)
         return C
-    
+
     def crf_decoder(self, C, config):
-        
+
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(
@@ -254,17 +254,17 @@ class Model(object):
                                 tf.float32,
                                 self.xavier_initializer
                                 )
-                
+
             b_softmax = tf.get_variable(
                                 "b_softmax",
                                 (config.t_alphabet_size,),
                                 tf.float32,
                                 tf.constant_initializer(0.0)
                                 )
-            
-            
+
+
         M = tf.add(tf.matmul(tf.reshape(C, (-1, 3 * config.h_units)), W_softmax), b_softmax)
-    
+
         self.M = tf.reshape(M, (-1, config.max_length, config.t_alphabet_size))
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(
                                                                     self.M,
@@ -272,7 +272,7 @@ class Model(object):
                                                                     self.Y_length_placeholder - self.Y_length_placeholder + config.max_length
                                                                     )
         return
-        
+
     def reinforced_decoder(self, C, t_embed, config):
 
         """softmax prediction layer"""
@@ -290,7 +290,7 @@ class Model(object):
                             tf.float32,
                             tf.constant_initializer(0.0)
                             )
-        
+
         with tf.variable_scope("baseline"):
             W1_baseline = tf.get_variable(
                             "W1_baseline",
@@ -298,21 +298,21 @@ class Model(object):
                             tf.float32,
                             self.xavier_initializer
                             )
-                
+
             b1_baseline = tf.get_variable(
                             "b1_baseline",
                             (32,),
                             tf.float32,
                             tf.constant_initializer(0.0)
                             )
-                                          
+
             W2_baseline = tf.get_variable(
                             "W2_baseline",
                             (32, 1),
                             tf.float32,
                             self.xavier_initializer
                             )
-                                          
+
             b2_baseline = tf.get_variable(
                             "b2_baseline",
                             (1,),
@@ -355,9 +355,9 @@ class Model(object):
 
                     C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
                     m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                    
+
                     M.append(m)
-            
+
             M = tf.stack(M, axis=1)
             cross_entropy_loss = tf.contrib.seq2seq.sequence_loss(
                                                         logits=M,
@@ -366,10 +366,10 @@ class Model(object):
                                                         average_across_timesteps=True,
                                                         average_across_batch=True
                                                         )
-                
+
             #b2_baseline is just a dummy loss added for coding purpose.
             return cross_entropy_loss, b2_baseline
-                
+
         def actor_critic():
             Policies = []
             Baselines = []
@@ -386,12 +386,12 @@ class Model(object):
 
                     C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
 
-                    
+
                     #forward pass for the baseline estimation
                     baseline = tf.add(tf.matmul(tf.stop_gradient(C_and_output), W1_baseline), b1_baseline)
                     baseline = tf.add(tf.matmul(baseline, W2_baseline), b2_baseline)
                     Baselines.append(baseline)
-                    
+
                     m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
                     policy = tf.nn.softmax(m)
                     prev_output = tf.matmul(tf.nn.softmax(10000.0 * m), self.t_lookup_table)
@@ -400,17 +400,17 @@ class Model(object):
             Policies = tf.stack(Policies, axis=1)
             Baselines = tf.stack(Baselines, axis=1)
 
-            Baselines = tf.reshape(Baselines, (-1, config.max_sentence_length))
-    
+            Baselines = tf.reshape(Baselines, (-1, config.max_length))
+
             is_true_tag = tf.cast(tf.equal(tf.cast(self.Y_placeholder, tf.int64), tf.argmax(Policies, axis=2)), tf.float32)
             Rewards = 2 * is_true_tag - 1.0
             Rewards = tf.multiply(Rewards, self.Y_mask_placeholder)
             Baselines = tf.multiply(Baselines, self.Y_mask_placeholder)
-            
+
             Rewards_t = tf.transpose(Rewards, [1,0])
             Baselines_t = tf.transpose(Baselines, [1,0])
             Returns = []
-            
+
             zeros = tf.cast(self.Y_length_placeholder - self.Y_length_placeholder, tf.float32)
             for t in range(config.max_length):
                 ret = zeros
@@ -419,23 +419,23 @@ class Model(object):
                         ret += (config.gamma ** i) * Rewards_t[t + i]
                         if i == config.n_step - 1:
                             ret += (config.gamma ** config.n_step) * Baselines_t[t + config.n_step]
-            
+
                 Returns.append(ret)
 
             Returns = tf.stack(Returns, axis=1)
 
             Objective = tf.log(tf.reduce_max(Policies, axis=2)) * tf.stop_gradient(Returns - Baselines)
             Objective_masked = tf.multiply(Objective, self.Y_mask_placeholder)
-            
+
             baseline_loss = tf.reduce_mean(tf.pow(tf.stop_gradient(Returns) - Baselines, 2) * self.Y_mask_placeholder) / 2.0
-            
+
             actor_loss = -tf.reduce_mean(Objective_masked)
             return actor_loss, baseline_loss
-            
+
         self.loss, self.baseline_loss = tf.cond(self.pretrain_placeholder, maximum_likelihood, actor_critic)
-    
+
         return
-    
+
     def greedy_decoding(self, C, config):
 
         """Reload softmax prediction layer"""
@@ -454,10 +454,10 @@ class Model(object):
                     output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     output, state = self.decoder_lstm(prev_output, state)
-                
+
                 C_and_output = tf.concat([C_tra[time_index], output], axis=1)
                 m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                
+
 
                 probs = tf.nn.softmax(m)
                 predicted_indices = tf.argmax(probs, axis=1)
@@ -495,10 +495,10 @@ class Model(object):
             for time_index in range(config.max_length):
                 if time_index==0:
                     output, (c_state, m_state) = self.decoder_lstm(GO_symbol, initial_state)
-                    
+
                     C_and_output = tf.concat([C_tra[time_index], output], axis=1)
                     pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                    
+
                     predictions = tf.nn.softmax(pred)
                     probs, indices = tf.nn.top_k(predictions, k=config.beamsize, sorted=True)
                     prev_indices = indices
@@ -531,7 +531,7 @@ class Model(object):
 
                         C_and_output = tf.concat([C_tra[time_index], output], axis=1)
                         pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
-                        
+
 
                         predictions = tf.nn.softmax(pred)
                         probs, indices = tf.nn.top_k(predictions, k=config.beamsize, sorted=True)

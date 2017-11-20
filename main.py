@@ -25,7 +25,7 @@ def train(config, model, session, X, X_length, X_mask, pretrain, Y, Y_length, Y_
                     Y_length=Y_length_in,
                     Y_mask=Y_mask_in
                     )
-        
+
         if pretrain:
             loss , _ = session.run([model.loss, model.train_op], feed_dict=feed)
             total_loss.append(loss)
@@ -38,7 +38,7 @@ def train(config, model, session, X, X_length, X_mask, pretrain, Y, Y_length, Y_
             baseline_loss, loss, _, _ = session.run([model.baseline_loss, model.loss, model.baseline_train_op, model.train_op], feed_dict=feed)
             total_loss.append(loss)
             baseline_total_loss.append(baseline_loss)
-            
+
             ##
             sys.stdout.write('\r{} / {} : loss = {} | baseline_loss = {}'.format(
                                                                             step,
@@ -48,7 +48,7 @@ def train(config, model, session, X, X_length, X_mask, pretrain, Y, Y_length, Y_
                                                                         )
                              )
             sys.stdout.flush()
-    
+
     if pretrain:
         return np.mean(total_loss), 0
     else:
@@ -66,11 +66,11 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
                     dropout=1,
                     pretrain=True
                     )
-        
+
         if config.inference=='reinforced-decoder-rnn':
             batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
             results.append(batch_predicted_indices[0])
-    
+
         elif config.inference=='crf':
             unary_scores, transition_params = session.run([model.M, model.crf_transition_params], feed_dict=feed)
             batch_results = []
@@ -79,8 +79,8 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
                 viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(unary_scores_each, transition_params)
                 predicted_indices = viterbi_sequence
                 batch_results.append(predicted_indices)
-            
-            results.append(batch_results)    
+
+            results.append(batch_results)
     return results
 
 def save_predictions(
@@ -206,25 +206,25 @@ def run(mode):
             best_dev_cost = float('inf')
             best_dev_epoch = 0
             first_start = time.time()
-            
+
             pretrain = True
-            #saver.restore(session, './rnn/exp1/pretrain_weights/weights')
-            #optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
-            #session.run(tf.variables_initializer(optimizer_scope))
-            
+            '''
+            saver.restore(session, './weights/weights')
+            optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            session.run(tf.variables_initializer(optimizer_scope))
+            '''
+
             for epoch in xrange(config.max_epochs):
                 print
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
-                
                 '''
-                if epoch==0 or epoch%3!=0:
+                if epoch%3==0 or epoch%3==1:
                     pretrain=False
                 else:
                     pretrain=True
                 '''
-                
                 train_loss, baseline_train_loss = train(
                                                     config,
                                                     model,
@@ -263,7 +263,7 @@ def run(mode):
                                 data['dev_data']['Y'],
                                 data['dev_data']['Y_length']
                                 )
-                    
+
                 dev_cost = 100 - accuracy("temp.predicted")
                 print 'Validation cost: {}'.format(dev_cost)
                 if  dev_cost < best_dev_cost:
@@ -272,17 +272,18 @@ def run(mode):
                     if not os.path.exists("./weights"):
                         os.makedirs("./weights")
                     saver.save(session, './weights/weights')
+                
                 # For early stopping which is kind of regularization for network.
                 if epoch - best_dev_epoch > config.early_stopping:
                     break
                     ###
-                        
+
                 print 'Epoch training time: {} seconds'.format(time.time() - start)
 
             print 'Total training time: {} seconds'.format(time.time() - first_start)
 
         elif mode=='test':
-            saver.restore(session, './weights/weights')
+            saver.restore(session, './crf/exp1/weights/weights')
             print
             print
             print 'Test'
@@ -301,7 +302,7 @@ def run(mode):
             save_predictions(
                             config,
                             predictions,
-                            "test.predicted",
+                            "crf.test.predicted",
                             data['test_data']['X'],
                             data['test_data']['X_length'],
                             data['s_num_to_char'],

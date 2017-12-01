@@ -144,7 +144,7 @@ def LD(str1, str2):
             else:
                 dg = 1
             m[x][y] = min(m[x-1][y] + 1, m[x][y-1] + 1, m[x-1][y-1] + dg)
-return int(m[len(str2)][len(str1)])
+    return int(m[len(str2)][len(str1)])
 
 def avg_edit_distance(fileName):
     with open(fileName, "r") as f:

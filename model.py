@@ -244,7 +244,7 @@ class Model(object):
                                 )
 
 
-        M = tf.add(tf.matmul(tf.reshape(C, (-1, config.h_units)), W_softmax), b_softmax)
+        M = tf.add(tf.matmul(tf.reshape(H, (-1, config.h_units)), W_softmax), b_softmax)
 
         self.M = tf.reshape(M, (-1, config.max_length, config.t_alphabet_size))
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(

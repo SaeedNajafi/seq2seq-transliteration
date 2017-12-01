@@ -226,6 +226,7 @@ class Model(object):
         return H
 
     def crf_decoder(self, H, config):
+        
         #local soft attention | window-based local attention
         C = []
         H_tra = tf.transpose(H, [1,0,2])
@@ -245,6 +246,7 @@ class Model(object):
             C.append(c)
             
         C = tf.stack(C, axis=1)
+        
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(

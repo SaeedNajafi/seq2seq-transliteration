@@ -10,12 +10,12 @@ class Configuration(object):
     end_symbol = '#'
 
     """ Neural hyper params """
-    s_embedding_size = 16
+    s_embedding_size = 32
     s_alphabet_size = None
-    t_embedding_size = 16
+    t_embedding_size = 32
     t_alphabet_size = None
-    max_length = 32
-    h_units = 32
+    max_length = 48
+    h_units = 64
     batch_size = 16
     #current batch_size
     b_size = None

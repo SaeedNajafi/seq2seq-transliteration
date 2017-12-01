@@ -1,5 +1,4 @@
 import numpy as np
-from numpy import *
 import utils as ut
 
 def load(config, mode):
@@ -149,12 +148,12 @@ def load_dataset(
                 exit()
 
     ret = {
-            'X': array(X_data),
-            'X_length': array(X_length),
-            'X_mask': array(X_mask),
-            'Y': array(Y_data),
-            'Y_length': array(Y_length),
-            'Y_mask': array(Y_mask)
+            'X': np.array(X_data),
+            'X_length': np.array(X_length),
+            'X_mask': np.array(X_mask),
+            'Y': np.array(Y_data),
+            'Y_length': np.array(Y_length),
+            'Y_mask': np.array(Y_mask)
             }
 
     return ret

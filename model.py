@@ -226,12 +226,30 @@ class Model(object):
         return H
 
     def crf_decoder(self, H, config):
-
+        #local soft attention | window-based local attention
+        C = []
+        H_tra = tf.transpose(H, [1,0,2])
+        for time_index in range(config.max_length):
+            prev_c = H_tra[time_index] - H_tra[time_index]
+            next_c = H_tra[time_index] - H_tra[time_index]
+            curr_c = H_tra[time_index]
+            if time_index==0:
+                next_c = H_tra[time_index + 1]
+            elif time_index==config.max_length-1:
+                prev_c = H_tra[time_index - 1]
+            else:
+                prev_c = H_tra[time_index - 1]
+                next_c = H_tra[time_index + 1]
+                
+            c = tf.concat([prev_c, curr_c, next_c], axis=1)
+            C.append(c)
+            
+        C = tf.stack(C, axis=1)
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(
                                 "W_softmax",
-                                (config.h_units, config.t_alphabet_size),
+                                (3 * config.h_units, config.t_alphabet_size),
                                 tf.float32,
                                 self.xavier_initializer
                                 )
@@ -244,7 +262,7 @@ class Model(object):
                                 )
 
 
-        M = tf.add(tf.matmul(tf.reshape(H, (-1, config.h_units)), W_softmax), b_softmax)
+        M = tf.add(tf.matmul(tf.reshape(C, (-1, 3 * config.h_units)), W_softmax), b_softmax)
 
         self.M = tf.reshape(M, (-1, config.max_length, config.t_alphabet_size))
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(

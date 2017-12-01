@@ -8,7 +8,7 @@ class Configuration(object):
     dev_set = './data/EnPe/mydev.txt'
     test_set = './data/EnPe/mytest.txt'
     end_symbol = '#'
-    
+
     """ Neural hyper params """
     s_embedding_size = 16
     s_alphabet_size = None
@@ -31,7 +31,7 @@ class Configuration(object):
     #inference='reinforced-decoder-rnn'
     #gamma = 0.7
     #n_step = 5
-    
+
     #decoding = 'greedy'
     #decoding = 'beamsearch'
-    #beamsize = 2
+    #beamsize = 1

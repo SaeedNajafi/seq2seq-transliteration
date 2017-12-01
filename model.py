@@ -254,13 +254,36 @@ class Model(object):
                                                                     )
         return
 
-    def reinforced_decoder(self, C, t_embed, config):
-
+    def reinforced_decoder(self, H, t_embed, config):
+        
+        """attention layer"""
+        with tf.variable_scope("attention"):
+            W_a = tf.get_variable(
+                                  "W_a",
+                                  (config.h_units, config.h_units),
+                                  tf.float32,
+                                  self.xavier_initializer
+                                  )
+                                  
+            W_c = tf.get_variable(
+                                "W_c",
+                                (2 * config.h_units, config.h_units),
+                                tf.float32,
+                                self.xavier_initializer
+                                )
+            
+            b_c = tf.get_variable(
+                                "b_c",
+                                (config.h_units,),
+                                tf.float32,
+                                tf.constant_initializer(0.0)
+                                )
+    
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(
                             "W_softmax",
-                            (4 * config.h_units, config.t_alphabet_size),
+                            (config.h_units, config.t_alphabet_size),
                             tf.float32,
                             self.xavier_initializer
                             )
@@ -275,7 +298,7 @@ class Model(object):
         with tf.variable_scope("baseline"):
             W1_baseline = tf.get_variable(
                             "W1_baseline",
-                            (4 * config.h_units, 32),
+                            (config.h_units, 32),
                             tf.float32,
                             self.xavier_initializer
                             )
@@ -318,8 +341,11 @@ class Model(object):
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         t_embed_tra = tf.transpose(t_embed, [1,0,2])
-        C_tra = tf.transpose(C, [1,0,2])
-
+        H_tra = tf.transpose(H, [1,0,2])
+        
+        # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+        states_mapped = tf.reshape(tf.matmul(tf.reshape(H, [-1, config.h_units]), W_a), [-1, config.max_length, config.h_units])
+        
         def maximum_likelihood():
             M = []
             with tf.variable_scope('decoder_rnn') as scope:
@@ -332,10 +358,14 @@ class Model(object):
                         output, state = self.decoder_lstm(t_embed_tra[time_index-1], state)
 
                     output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
-
-
-                    C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
-                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    
+                    # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+                    
+                    Score = tf.reduce_sum(states_mapped * tf.expand_dims(output_dropped, axis=1), axis=2)
+                    Att = tf.nn.softmax(Score, dim=1)
+                    C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                    final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output_dropped], axis=1), W_c), b_c))
+                    m = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
 
                     M.append(m)
 
@@ -364,16 +394,19 @@ class Model(object):
                         output, state = self.decoder_lstm(prev_output, state)
 
                     output_dropped = tf.nn.dropout(output, self.dropout_placeholder)
-
-                    C_and_output = tf.concat([C_tra[time_index], output_dropped], axis=1)
-
+                    # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+                    
+                    Score = tf.reduce_sum(states_mapped * tf.expand_dims(output_dropped, axis=1), axis=2)
+                    Att = tf.nn.softmax(Score, dim=1)
+                    C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                    final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output_dropped], axis=1), W_c), b_c))
 
                     #forward pass for the baseline estimation
-                    baseline = tf.add(tf.matmul(tf.stop_gradient(C_and_output), W1_baseline), b1_baseline)
+                    baseline = tf.add(tf.matmul(tf.stop_gradient(final_state), W1_baseline), b1_baseline)
                     baseline = tf.add(tf.matmul(baseline, W2_baseline), b2_baseline)
                     Baselines.append(baseline)
 
-                    m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    m = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
                     policy = tf.nn.softmax(m)
                     prev_output = tf.matmul(tf.nn.softmax(10000.0 * m), self.t_lookup_table)
                     Policies.append(policy)
@@ -417,8 +450,14 @@ class Model(object):
 
         return
 
-    def greedy_decoding(self, C, config):
-
+    def greedy_decoding(self, H, config):
+        
+        """Reload attention layer"""
+        with tf.variable_scope("attention", reuse=True):
+            W_a = tf.get_variable("W_a")
+            W_c = tf.get_variable("W_c")
+            b_c = tf.get_variable("b_c")
+        
         """Reload softmax prediction layer"""
         with tf.variable_scope("softmax", reuse=True):
             W_softmax = tf.get_variable("W_softmax")
@@ -426,8 +465,10 @@ class Model(object):
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
-        C_tra = tf.transpose(C, [1,0,2])
-
+        H_tra = tf.transpose(H, [1,0,2])
+        
+        # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+        states_mapped = tf.reshape(tf.matmul(tf.reshape(H, [-1, config.h_units]), W_a), [-1, config.max_length, config.h_units])
         outputs = []
         with tf.variable_scope("decoder_rnn", reuse=True) as scope:
             for time_index in range(config.max_length):
@@ -435,9 +476,15 @@ class Model(object):
                     output, state = self.decoder_lstm(GO_symbol, initial_state)
                 else:
                     output, state = self.decoder_lstm(prev_output, state)
-
-                C_and_output = tf.concat([C_tra[time_index], output], axis=1)
-                m = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                
+                # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+                
+                Score = tf.reduce_sum(states_mapped * tf.expand_dims(output, axis=1), axis=2)
+                Att = tf.nn.softmax(Score, dim=1)
+                C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output], axis=1), W_c), b_c))
+                
+                m = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
 
 
                 probs = tf.nn.softmax(m)
@@ -449,8 +496,14 @@ class Model(object):
 
         return outputs
 
-    def beam_decoding(self, C, config):
-
+    def beam_decoding(self, H, config):
+        
+        """Reload attention layer"""
+        with tf.variable_scope("attention", reuse=True):
+            W_a = tf.get_variable("W_a")
+            W_c = tf.get_variable("W_c")
+            b_c = tf.get_variable("b_c")
+        
         """Reload softmax prediction layer"""
         with tf.variable_scope("softmax", reuse=True):
             W_softmax = tf.get_variable("W_softmax")
@@ -458,8 +511,11 @@ class Model(object):
 
         GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
         initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
-        C_tra = tf.transpose(C, [1,0,2])
-
+        H_tra = tf.transpose(H, [1,0,2])
+        
+        # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+        states_mapped = tf.reshape(tf.matmul(tf.reshape(H, [-1, config.h_units]), W_a), [-1, config.max_length, config.h_units])
+        
         """ we will need index to select top ranked beamsize stuff"""
         #batch index
         b_index = tf.reshape(tf.range(0, config.b_size),(config.b_size, 1))
@@ -476,9 +532,15 @@ class Model(object):
             for time_index in range(config.max_length):
                 if time_index==0:
                     output, (c_state, m_state) = self.decoder_lstm(GO_symbol, initial_state)
-
-                    C_and_output = tf.concat([C_tra[time_index], output], axis=1)
-                    pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                    
+                    # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+                    
+                    Score = tf.reduce_sum(states_mapped * tf.expand_dims(output, axis=1), axis=2)
+                    Att = tf.nn.softmax(Score, dim=1)
+                    C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                    final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output], axis=1), W_c), b_c))
+                    
+                    pred = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
 
                     predictions = tf.nn.softmax(pred)
                     probs, indices = tf.nn.top_k(predictions, k=config.beamsize, sorted=True)
@@ -509,9 +571,14 @@ class Model(object):
                                                         (prev_c_states_t[b],prev_m_states_t[b])
                                                         )
 
+                        # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
 
-                        C_and_output = tf.concat([C_tra[time_index], output], axis=1)
-                        pred = tf.add(tf.matmul(C_and_output, W_softmax), b_softmax)
+                        Score = tf.reduce_sum(states_mapped * tf.expand_dims(output, axis=1), axis=2)
+                        Att = tf.nn.softmax(Score, dim=1)
+                        C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                        final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output], axis=1), W_c), b_c))
+
+                        pred = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
 
 
                         predictions = tf.nn.softmax(pred)

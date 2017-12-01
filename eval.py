@@ -1,5 +1,7 @@
-pred_lines = open('test.predicted', 'r').readlines()
-ref_lines = open('./data/EnPe/corrected_dev.txt', 'r').readlines()
+import sys
+
+pred_lines = open(sys.argv[1], 'r').readlines()
+ref_lines = open(sys.argv[2], 'r').readlines()
 total_source = 0.0
 total_correct = 0.0
 index = 0

@@ -7,7 +7,8 @@ class Configuration(object):
     train_set = './data/EnPe/mytrain.txt'
     dev_set = './data/EnPe/mydev.txt'
     test_set = './data/EnPe/mytest.txt'
-
+    end_symbol = '#'
+    
     """ Neural hyper params """
     s_embedding_size = 16
     s_alphabet_size = None

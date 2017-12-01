@@ -11,23 +11,23 @@ class Model(object):
 
         s_embed, t_embed = self.embeddings(config)
 
-        C = self.encoder(s_embed, config)
+        H = self.encoder(s_embed, config)
 
         if config.inference=='reinforced-decoder-rnn':
 
-            self.reinforced_decoder(C, t_embed, config)
+            self.reinforced_decoder(H, t_embed, config)
 
             with tf.variable_scope("baseline_adam_optimizer"):
                 self.baseline_train_op = tf.train.AdamOptimizer(config.learning_rate).minimize(self.baseline_loss)
 
             if config.decoding=='greedy':
-                self.outputs = self.greedy_decoding(C, config)
+                self.outputs = self.greedy_decoding(H, config)
 
             elif config.decoding=='beamsearch':
-                self.outputs = self.beam_decoding(C, config)
+                self.outputs = self.beam_decoding(H, config)
 
         elif config.inference=='crf':
-            self.crf_decoder(C, config)
+            self.crf_decoder(H, config)
             self.loss = tf.reduce_mean(-self.crf_log_likelihood)
 
         self.train_op = self.add_training_op(self.loss, config)
@@ -222,35 +222,16 @@ class Model(object):
                     )
             H = tf.tanh(H)
             H = tf.reshape(H, (-1, config.max_length, config.h_units))
+        
+        return H
 
-            #local soft attention | window-based local attention
-            C = []
-            H_tra = tf.transpose(H, [1,0,2])
-            for time_index in range(config.max_length):
-                prev_c = H_tra[time_index] - H_tra[time_index]
-                next_c = H_tra[time_index] - H_tra[time_index]
-                curr_c = H_tra[time_index]
-                if time_index==0:
-                    next_c = H_tra[time_index + 1]
-                elif time_index==config.max_length-1:
-                    prev_c = H_tra[time_index - 1]
-                else:
-                    prev_c = H_tra[time_index - 1]
-                    next_c = H_tra[time_index + 1]
-
-                c = tf.concat([prev_c, curr_c, next_c], axis=1)
-                C.append(c)
-
-            C = tf.stack(C, axis=1)
-        return C
-
-    def crf_decoder(self, C, config):
+    def crf_decoder(self, H, config):
 
         """softmax prediction layer"""
         with tf.variable_scope("softmax"):
             W_softmax = tf.get_variable(
                                 "W_softmax",
-                                (3 * config.h_units, config.t_alphabet_size),
+                                (config.h_units, config.t_alphabet_size),
                                 tf.float32,
                                 self.xavier_initializer
                                 )
@@ -263,7 +244,7 @@ class Model(object):
                                 )
 
 
-        M = tf.add(tf.matmul(tf.reshape(C, (-1, 3 * config.h_units)), W_softmax), b_softmax)
+        M = tf.add(tf.matmul(tf.reshape(C, (-1, config.h_units)), W_softmax), b_softmax)
 
         self.M = tf.reshape(M, (-1, config.max_length, config.t_alphabet_size))
         self.crf_log_likelihood, self.crf_transition_params = tf.contrib.crf.crf_log_likelihood(

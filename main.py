@@ -113,7 +113,7 @@ def save_predictions(
                     if(char_index < X_length[ad] - 1):
                         s_to_file += str(s_num_to_char[X[ad][char_index]].encode('utf8'))
 
-                    if(str(t_num_to_char[batch_predictions[word_index][char_index]].encode('utf8'))!="#" and p_end==False):
+                    if(str(t_num_to_char[batch_predictions[word_index][char_index]].encode('utf8'))!=config.end_symbol and p_end==False):
                         p_to_file += str(t_num_to_char[batch_predictions[word_index][char_index]].encode('utf8'))
                     else: p_end = True
 
@@ -130,21 +130,21 @@ def save_predictions(
                 f.write(to_file)
     return
 
-#Recursive Levenshtein Function in Python
-def LD(y1, y2):
-    if y1 is None or len(y1) == 0:
-        return len(y2)
-
-    if y2 is None or len(y2) == 0:
-        return len(y1)
-
-    if y1[-1] == y2[-1]:
-        cost = 0
-    else:
-        cost = 1
-
-    dist = min([LD(y1[:-1], y2)+ 1, LD(y1, y2[:-1])+ 1, LD(y1[:-1], y2[:-1]) + cost])
-    return dist
+#Recursive Levenshtein Distance Function in Python
+def LD(str1, str2):
+    m = np.zeros([len(str2)+1, len(str1)+1])
+    for x in xrange(1, len(str2) + 1):
+        m[x][0] = m[x-1][0] + 1
+    for y in xrange(1, len(str1) + 1):
+        m[0][y] = m[0][y-1] + 1
+    for x in xrange(1, len(str2) + 1):
+        for y in xrange(1, len(str1) + 1):
+            if str1[y-1] == str2[x-1]:
+                dg = 0
+            else:
+                dg = 1
+            m[x][y] = min(m[x-1][y] + 1, m[x][y-1] + 1, m[x-1][y-1] + dg)
+return int(m[len(str2)][len(str1)])
 
 def avg_edit_distance(fileName):
     with open(fileName, "r") as f:
@@ -156,8 +156,6 @@ def avg_edit_distance(fileName):
             if len(line)==3:
                 ref = list(line[1].decode('utf8'))
                 pred = list(line[2].decode('utf8'))
-                ref = [x for x in ref if x != u'\u200c']
-                pred = [x for x in pred if x != u'\u200c']
                 dist += LD(ref, pred)
             else:
                 print "Wrong input file format for evaluating!"
@@ -176,8 +174,6 @@ def accuracy(fileName):
         if len(line)==3:
             ref = list(line[1].decode('utf8'))
             pred = list(line[2].decode('utf8'))
-            ref = [x for x in ref if x != u'\u200c']
-            pred = [x for x in pred if x != u'\u200c']
             total_source += 1
             if ref == pred:
                 total_correct += 1
@@ -208,6 +204,7 @@ def run(mode):
             first_start = time.time()
 
             pretrain = True
+            
             '''
             saver.restore(session, './weights/weights')
             optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
@@ -219,12 +216,14 @@ def run(mode):
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
+                
                 '''
                 if epoch%3==0 or epoch%3==1:
                     pretrain=False
                 else:
                     pretrain=True
                 '''
+                
                 train_loss, baseline_train_loss = train(
                                                     config,
                                                     model,
@@ -245,9 +244,9 @@ def run(mode):
                                      data['dev_data']['X'],
                                      data['dev_data']['X_length'],
                                      data['dev_data']['X_mask'],
-                                     data['train_data']['Y'],
-                                     data['train_data']['Y_length'],
-                                     data['train_data']['Y_mask']
+                                     data['dev_data']['Y'],
+                                     data['dev_data']['Y_length'],
+                                     data['dev_data']['Y_mask']
                                      )
 
                 print '\rTraining loss: {}'.format(train_loss)
@@ -264,14 +263,15 @@ def run(mode):
                                 data['dev_data']['Y_length']
                                 )
 
-                dev_cost = 100 - accuracy("temp.predicted")
+                #dev_cost = 100 - accuracy("temp.predicted")
+                dev_cost = avg_edit_distance("temp.predicted")
                 print 'Validation cost: {}'.format(dev_cost)
                 if  dev_cost < best_dev_cost:
                     best_dev_cost = dev_cost
                     best_dev_epoch = epoch
                     if not os.path.exists("./weights"):
                         os.makedirs("./weights")
-                    saver.save(session, './weights/weights')
+                    saver.save(session, "./weights/weights")
                 
                 # For early stopping which is kind of regularization for network.
                 if epoch - best_dev_epoch > config.early_stopping:
@@ -283,7 +283,7 @@ def run(mode):
             print 'Total training time: {} seconds'.format(time.time() - first_start)
 
         elif mode=='test':
-            saver.restore(session, './crf/exp1/weights/weights')
+            saver.restore(session, './weights/weights')
             print
             print
             print 'Test'
@@ -302,7 +302,7 @@ def run(mode):
             save_predictions(
                             config,
                             predictions,
-                            "crf.test.predicted",
+                            "test.predicted",
                             data['test_data']['X'],
                             data['test_data']['X_length'],
                             data['s_num_to_char'],

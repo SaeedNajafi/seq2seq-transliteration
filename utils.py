@@ -15,7 +15,7 @@ def load(config, mode):
     for line in lines:
         s_chars.append(line.decode('utf8').strip())
 
-    s_chars.append("#")
+    s_chars.append(config.end_symbol)
 
     config.s_alphabet_size = len(s_chars)
 
@@ -26,7 +26,7 @@ def load(config, mode):
         t_chars.append(line.decode('utf8').strip())
 
     #end token
-    t_chars.append("#")
+    t_chars.append(config.end_symbol)
 
     config.t_alphabet_size = len(t_chars)
 
@@ -44,6 +44,7 @@ def load(config, mode):
         #Loads the training set
         print "INFO: Reading training data!"
         train_data = load_dataset(
+                            config,
                             config.train_set,
                             s_chars,
                             t_chars,
@@ -56,6 +57,7 @@ def load(config, mode):
         #Loads the dev set
         print "INFO: Reading dev data!"
         dev_data = load_dataset(
+                            config,
                             config.dev_set,
                             s_chars,
                             t_chars,
@@ -69,6 +71,7 @@ def load(config, mode):
         #Loads the test set
         print "INFO: Reading test data!"
         test_data = load_dataset(
+                            config,
                             config.test_set,
                             s_chars,
                             t_chars,
@@ -87,6 +90,7 @@ def load(config, mode):
     return ret
 
 def load_dataset(
+                config,
                 fname,
                 s_chars,
                 t_chars,
@@ -107,7 +111,7 @@ def load_dataset(
         for line in f:
             XY = line.decode('utf-8').strip().split("\t")
             if len(XY) > 0:
-                X = map_char(XY[0], s_chars, s_char_to_num)
+                X = map_char(XY[0], s_chars, s_char_to_num, config)
                 ln = len(X)
                 X_length.append(ln)
                 mask_list = [1.0] * ln
@@ -124,7 +128,7 @@ def load_dataset(
                 X_mask.append(mask_list)
 
                 if mode=='train':
-                    Y = map_char(XY[1], t_chars, t_char_to_num)
+                    Y = map_char(XY[1], t_chars, t_char_to_num, config)
                     ln = len(Y)
                     Y_length.append(ln)
                     mask_list = [1.0] * ln
@@ -155,7 +159,7 @@ def load_dataset(
 
     return ret
 
-def map_char(word, charset, map_to_num):
+def map_char(word, charset, map_to_num, config):
     out = []
     for each in list(word):
         if each in charset:
@@ -164,7 +168,7 @@ def map_char(word, charset, map_to_num):
             print "could not find the char:" + each
 
     #adding end sign
-    out.append(map_to_num['#'])
+    out.append(map_to_num[config.end_symbol])
     return out
 
 def data_iterator(

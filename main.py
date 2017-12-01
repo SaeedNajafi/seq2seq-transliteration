@@ -263,8 +263,8 @@ def run(mode):
                                 data['dev_data']['Y_length']
                                 )
 
-                #dev_cost = 100 - accuracy("temp.predicted")
-                dev_cost = avg_edit_distance("temp.predicted")
+                dev_cost = 100 - accuracy("temp.predicted")
+                #dev_cost = avg_edit_distance("temp.predicted")
                 print 'Validation cost: {}'.format(dev_cost)
                 if  dev_cost < best_dev_cost:
                     best_dev_cost = dev_cost

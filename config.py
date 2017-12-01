@@ -16,7 +16,7 @@ class Configuration(object):
     t_alphabet_size = None
     max_length = 32
     h_units = 32
-    batch_size = 4
+    batch_size = 16
     #current batch_size
     b_size = None
     dropout = 0.5

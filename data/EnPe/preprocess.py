@@ -1,4 +1,5 @@
 import random
+import numpy as np
 
 ft = open('mytrain.txt', 'w')
 fd = open('mydev.txt', 'w')
@@ -14,7 +15,8 @@ for each in lines:
     lst = each.split(" ")
     s = lst[0]
     counter += 1
-    if counter%10==9:
+    i = np.random.randint(10)
+    if counter%10==i:
         f = fd
     else:
         f = ft

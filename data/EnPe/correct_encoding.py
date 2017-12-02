@@ -189,7 +189,8 @@ for name in e.findall('Name'):
     sc = source_name.text
     sc += " "
     for target in name.findall('TargetName'):
-        tg = "".join([mapping[e] for e in list(target.text)])
+        tg = target.text
+	#tg = "".join([mapping[e] for e in list(target.text)])
         sc += tg + " "
     
     fw.write(sc.encode('utf8')+'\n')

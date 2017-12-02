@@ -216,7 +216,10 @@ def run(mode):
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
-                
+		if epoch%4==3:
+			optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            		session.run(tf.variables_initializer(optimizer_scope))
+
                 '''
                 if epoch%3==0 or epoch%3==1:
                     pretrain=False

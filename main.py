@@ -205,11 +205,11 @@ def run(mode):
 
             pretrain = True
             
-            '''
-            saver.restore(session, './weights/weights')
-            optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
-            session.run(tf.variables_initializer(optimizer_scope))
-            '''
+            
+            #saver.restore(session, './weights/weights')
+            #optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            #session.run(tf.variables_initializer(optimizer_scope))
+            
 
             for epoch in xrange(config.max_epochs):
                 print

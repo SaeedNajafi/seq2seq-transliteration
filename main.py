@@ -203,12 +203,12 @@ def run(mode):
             best_dev_epoch = 0
             first_start = time.time()
 
-            pretrain = True
+            pretrain = False
             
             
-            #saver.restore(session, './weights/weights')
-            #optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
-            #session.run(tf.variables_initializer(optimizer_scope))
+            saver.restore(session, './rnn/EnPe/exp3/weights/weights')
+            optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            session.run(tf.variables_initializer(optimizer_scope))
             
 
             for epoch in xrange(config.max_epochs):
@@ -216,13 +216,16 @@ def run(mode):
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
+		'''
+		if epoch%4==3:
+			optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
+            		session.run(tf.variables_initializer(optimizer_scope))
                 
                 '''
                 if epoch%3==0 or epoch%3==1:
                     pretrain=False
                 else:
                     pretrain=True
-                '''
                 
                 train_loss, baseline_train_loss = train(
                                                     config,

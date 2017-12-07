@@ -204,36 +204,28 @@ def run(mode):
             first_start = time.time()
 
             pretrain = False
-            
-            
+
             saver.restore(session, './rnn/EnPe/exp3/weights/weights')
             optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
             session.run(tf.variables_initializer(optimizer_scope))
-            
 
             for epoch in xrange(config.max_epochs):
                 print
                 print 'Epoch {}'.format(epoch)
 
                 start = time.time()
-<<<<<<< HEAD
+
 		'''
 		if epoch%4==3:
 			optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
             		session.run(tf.variables_initializer(optimizer_scope))
-                
-=======
-		if epoch%4==3:
-			optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
-            		session.run(tf.variables_initializer(optimizer_scope))
-
->>>>>>> 08dc019a3d8b5b6cf204bfa69a46aec8fd12a920
                 '''
+
                 if epoch%3==0 or epoch%3==1:
                     pretrain=False
                 else:
                     pretrain=True
-                
+
                 train_loss, baseline_train_loss = train(
                                                     config,
                                                     model,
@@ -282,7 +274,7 @@ def run(mode):
                     if not os.path.exists("./weights"):
                         os.makedirs("./weights")
                     saver.save(session, "./weights/weights")
-                
+
                 # For early stopping which is kind of regularization for network.
                 if epoch - best_dev_epoch > config.early_stopping:
                     break

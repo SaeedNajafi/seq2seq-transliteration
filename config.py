@@ -17,7 +17,6 @@ class Configuration(object):
     max_length = 32
     h_units = 200
     batch_size = 32
-    batch_size = 4
     #current batch_size
     b_size = None
     dropout = 0.5

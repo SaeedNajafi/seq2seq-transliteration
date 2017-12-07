@@ -1,5 +1,9 @@
 import random
 import numpy as np
+<<<<<<< HEAD
+=======
+
+>>>>>>> 08dc019a3d8b5b6cf204bfa69a46aec8fd12a920
 ft = open('mytrain.txt', 'w')
 fd = open('mydev.txt', 'w')
 f_source = open('source.txt', 'w')

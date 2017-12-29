@@ -6,34 +6,23 @@ def load(config, mode):
     Creates random vectors for source and target characters.
     Loads train/dev/test data.
     """
-
-    print "INFO: creating random character vectors!"
-    s_chars = []
-    f = open(config.source_alphabet, 'r')
-    lines = f.readlines()
-    for line in lines:
-        s_chars.append(line.decode('utf8').strip())
-
-    s_chars.append(config.end_symbol)
-
+    fp = open(config.source_alphabet, 'r')
+    s_chars = [line.strip().decode('utf8') for line in fp.readlines()]
+    s_chars += config.end_symbol
     config.s_alphabet_size = len(s_chars)
+    fp.close()
 
-    t_chars = []
-    f = open(config.target_alphabet, 'r')
-    lines = f.readlines()
-    for line in lines:
-        t_chars.append(line.decode('utf8').strip())
-
-    #end token
-    t_chars.append(config.end_symbol)
-
+    fp = open(config.target_alphabet, 'r')
+    t_chars = [line.strip().decode('utf8') for line in fp.readlines()]
+    t_chars += config.end_symbol
     config.t_alphabet_size = len(t_chars)
+    fp.close()
 
-    s_num_to_char = dict(enumerate(s_chars))
-    s_char_to_num = {v:k for k,v in s_num_to_char.iteritems()}
+    s_id_to_char = dict(enumerate(s_chars))
+    s_char_to_id = {v:k for k,v in s_id_to_char.iteritems()}
 
-    t_num_to_char = dict(enumerate(t_chars))
-    t_char_to_num = {v:k for k,v in t_num_to_char.iteritems()}
+    t_id_to_char = dict(enumerate(t_chars))
+    t_char_to_id = {v:k for k,v in t_id_to_char.iteritems()}
 
     train_data = None
     dev_data = None
@@ -47,8 +36,8 @@ def load(config, mode):
                             config.train_set,
                             s_chars,
                             t_chars,
-                            s_char_to_num,
-                            t_char_to_num,
+                            s_char_to_id,
+                            t_char_to_id,
                             config.max_length,
                             mode
                             )
@@ -60,8 +49,8 @@ def load(config, mode):
                             config.dev_set,
                             s_chars,
                             t_chars,
-                            s_char_to_num,
-                            t_char_to_num,
+                            s_char_to_id,
+                            t_char_to_id,
                             config.max_length,
                             mode
                             )
@@ -74,15 +63,15 @@ def load(config, mode):
                             config.test_set,
                             s_chars,
                             t_chars,
-                            s_char_to_num,
-                            t_char_to_num,
+                            s_char_to_id,
+                            t_char_to_id,
                             config.max_length,
                             mode
                             )
 
     ret = {}
-    ret['s_num_to_char'] = s_num_to_char
-    ret['t_num_to_char'] = t_num_to_char
+    ret['s_id_to_char'] = s_id_to_char
+    ret['t_id_to_char'] = t_id_to_char
     ret['train_data'] = train_data
     ret['dev_data'] = dev_data
     ret['test_data'] = test_data
@@ -93,8 +82,8 @@ def load_dataset(
                 fname,
                 s_chars,
                 t_chars,
-                s_char_to_num,
-                t_char_to_num,
+                s_char_to_id,
+                t_char_to_id,
                 max_length,
                 mode
                 ):
@@ -110,7 +99,7 @@ def load_dataset(
         for line in f:
             XY = line.decode('utf-8').strip().split("\t")
             if len(XY) > 0:
-                X = map_char(XY[0], s_chars, s_char_to_num, config)
+                X = map_char(XY[0], s_chars, s_char_to_id, config)
                 ln = len(X)
                 X_length.append(ln)
                 mask_list = [1.0] * ln
@@ -127,7 +116,7 @@ def load_dataset(
                 X_mask.append(mask_list)
 
                 if mode=='train':
-                    Y = map_char(XY[1], t_chars, t_char_to_num, config)
+                    Y = map_char(XY[1], t_chars, t_char_to_id, config)
                     ln = len(Y)
                     Y_length.append(ln)
                     mask_list = [1.0] * ln
@@ -158,16 +147,14 @@ def load_dataset(
 
     return ret
 
-def map_char(word, charset, map_to_num, config):
-    out = []
-    for each in list(word):
-        if each in charset:
-            out.append(map_to_num[each])
-        else:
-            print "could not find the char:" + each
+def map_char(word, charset, map_to_id, config):
+    try:
+        out = [map_to_id[ch] for ch in word if ch in charset]
+    except Exception:
+        raise KeyError("could not find some chars")
 
     #adding end sign
-    out.append(map_to_num[config.end_symbol])
+    out.append(map_to_id[config.end_symbol])
     return out
 
 def data_iterator(

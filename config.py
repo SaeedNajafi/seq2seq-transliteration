@@ -11,27 +11,23 @@ class Configuration(object):
 
     """ Neural hyper params """
     s_embedding_size = 100
-    s_alphabet_size = None
     t_embedding_size = 100
-    t_alphabet_size = None
     max_length = 32
     h_units = 200
     batch_size = 32
-    #current batch_size
-    b_size = None
+
     dropout = 0.5
     learning_rate = 0.0005
     max_gradient_norm = 5.
     max_epochs = 100
     early_stopping = 4
-    random_seed = 1001
-
-
-    #inference='crf'
-    inference='reinforced-decoder-rnn'
-    gamma = 0.45
+    runs=10
+    gamma = 0.7
     n_step = 3
 
-    #decoding = 'greedy'
-    #decoding = 'beamsearch'
-    #beamsize = 2
+    inference = "CRF"
+    #inference = "RNN"
+    #inference = "AC-RNN"
+
+    beamsearch = False
+    beamsize = 4

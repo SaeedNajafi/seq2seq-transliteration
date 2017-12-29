@@ -187,6 +187,7 @@ def accuracy(fileName):
 def run_model():
     config = Configuration()
     data = ut.load(config, 'train')
+    test_data = ut.load(config, 'test')
     path = "./EnPe_results"
     if not os.path.exists(path):
         os.makedirs(path)
@@ -313,15 +314,14 @@ def run_model():
                                 )
 
 		print
-                data = ut.load(config, 'test')
                 print 'Model:{} Run:{} Test'.format(model_name, run)
                 predictions = predict(
                                      config,
                                      model,
                                      session,
-                                     data['test_data']['X'],
-                                     data['test_data']['X_length'],
-                                     data['test_data']['X_mask']
+                                     test_data['test_data']['X'],
+                                     test_data['test_data']['X_length'],
+                                     test_data['test_data']['X_mask']
                                      )
 
                 print 'Total prediction time: {} seconds'.format(time.time() - start)
@@ -330,10 +330,10 @@ def run_model():
                                 config,
                                 predictions,
                                 path + '/' + model_name + '.' + str(run) + '.' + "test.predicted",
-                                data['test_data']['X'],
-                                data['test_data']['X_length'],
-                                data['s_id_to_char'],
-                                data['t_id_to_char']
+                                test_data['test_data']['X'],
+                                test_data['test_data']['X_length'],
+                                test_data['s_id_to_char'],
+                                test_data['t_id_to_char']
                                 )
     return
 

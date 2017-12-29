@@ -19,9 +19,9 @@ class Configuration(object):
     dropout = 0.5
     learning_rate = 0.0005
     max_gradient_norm = 5.
-    max_epochs = 5
+    max_epochs = 100
     early_stopping = 4
-    runs=1
+    runs=10
     gamma = 0.7
     n_step = 3
 

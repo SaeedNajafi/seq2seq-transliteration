@@ -181,8 +181,8 @@ mapping[u'\u067e'] = u'\u067e'
 
 mapping[u'\u0698'] = u'\u0698'
 
-fw = open('corrected_dev.txt', 'w')
-e = xml.etree.ElementTree.parse('dev.xml').getroot()
+fw = open('corrected_train.txt', 'w')
+e = xml.etree.ElementTree.parse('train.xml').getroot()
 
 for name in e.findall('Name'):
     source_name = name.find('SourceName')
@@ -192,5 +192,5 @@ for name in e.findall('Name'):
         tg = target.text
 	#tg = "".join([mapping[e] for e in list(target.text)])
         sc += tg + " "
-
+    
     fw.write(sc.encode('utf8')+'\n')

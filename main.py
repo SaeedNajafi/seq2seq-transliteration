@@ -187,7 +187,7 @@ def accuracy(fileName):
 def run_model():
     config = Configuration()
     data = ut.load(config, 'train')
-    path = "./results"
+    path = "./EnPe_results"
     if not os.path.exists(path):
         os.makedirs(path)
 
@@ -250,7 +250,7 @@ def run_model():
                                              data['dev_data']['Y_mask']
                                              )
 
-                        print 'Training loss: {}'.format(train_loss)
+                        print '\rTraining loss: {}'.format(train_loss)
                         if alpha!=0.0: print 'V Training loss: {}'.format(V_train_loss)
                         save_predictions(
                                         config,
@@ -312,8 +312,8 @@ def run_model():
                                 data['dev_data']['Y_length']
                                 )
 
+		print
                 data = ut.load(config, 'test')
-                print
                 print 'Model:{} Run:{} Test'.format(model_name, run)
                 predictions = predict(
                                      config,

@@ -17,11 +17,20 @@ class Model(object):
         if config.inference=="CRF":
             self.train_by_crf(H, config)
 
-        elif config.inference=="RNN" or config.inference=="AC-RNN":
+        elif config.inference=="R-RNN" or config.inference=="BR-RNN" or config.inference=="RNN" or config.inference=="AC-RNN":
             self.train_by_actor_critic_rnn(H, t_embed, config)
 
             with tf.variable_scope("V_adam_optimizer"):
                 self.V_train_op = tf.train.AdamOptimizer(config.learning_rate).minimize(self.V_loss)
+
+            if not config.beamsearch:
+                self.outputs = self.greedy_decoding(H, config)
+
+            else:
+                self.outputs = self.beam_decoding(H, config)
+
+        elif config.inference=="SCH" or config.inference=="DIF-SCH":
+            self.train_by_scheduled_decoder_rnn(H, t_embed, config)
 
             if not config.beamsearch:
                 self.outputs = self.greedy_decoding(H, config)
@@ -46,9 +55,12 @@ class Model(object):
         self.Y_mask_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, config.max_length))
         self.dropout_placeholder = tf.placeholder(dtype=tf.float32, shape=())
         self.alpha_placeholder = tf.placeholder(dtype=tf.float32, shape=())
+        self.schedule_placeholder = tf.placeholder(dtype=tf.float32, shape=())
+        self.coin_probs_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, config.max_length))
+        self.beta_placeholder = tf.placeholder(dtype=tf.float32, shape=())
         return
 
-    def create_feed_dict(self, X, X_length, X_mask, dropout, alpha, Y=None, Y_length=None, Y_mask=None):
+    def create_feed_dict(self, X, X_length, X_mask, dropout, alpha, schedule, coin_probs, beta, Y=None, Y_length=None, Y_mask=None):
         """Creates the feed_dict.
         A feed_dict takes the form of:
         feed_dict = {
@@ -62,7 +74,10 @@ class Model(object):
             self.X_length_placeholder: X_length,
             self.X_mask_placeholder: X_mask,
             self.dropout_placeholder: dropout,
-            self.alpha_placeholder: alpha
+            self.alpha_placeholder: alpha,
+            self.schedule_placeholder: schedule,
+            self.coin_probs_placeholder: coin_probs,
+            self.beta_placeholder: beta
             }
 
         if Y is not None:
@@ -275,6 +290,113 @@ class Model(object):
         self.loss = tf.reduce_mean(-self.crf_log_likelihood)
         return
 
+    def train_by_scheduled_decoder_rnn(self, H, t_embed, config):
+        """attention layer"""
+        with tf.variable_scope("attention"):
+            W_a = tf.get_variable(
+                                  "W_a",
+                                  (config.h_units, config.h_units),
+                                  tf.float32,
+                                  self.xavier_initializer
+                                  )
+
+            W_c = tf.get_variable(
+                                "W_c",
+                                (2 * config.h_units, config.h_units),
+                                tf.float32,
+                                self.xavier_initializer
+                                )
+
+            b_c = tf.get_variable(
+                                "b_c",
+                                (config.h_units,),
+                                tf.float32,
+                                tf.constant_initializer(0.0)
+                                )
+
+        """softmax prediction layer"""
+        with tf.variable_scope("softmax"):
+            W_softmax = tf.get_variable(
+                            "W_softmax",
+                            (config.h_units, config.t_alphabet_size),
+                            tf.float32,
+                            self.xavier_initializer
+                            )
+
+            b_softmax = tf.get_variable(
+                            "b_softmax",
+                            (config.t_alphabet_size,),
+                            tf.float32,
+                            tf.constant_initializer(0.0)
+                            )
+
+        with tf.variable_scope('decoder_rnn') as scope:
+            self.decoder_lstm = tf.contrib.rnn.LSTMCell(
+                                        num_units=config.h_units,
+                                        use_peepholes=False,
+                                        cell_clip=None,
+                                        initializer=self.xavier_initializer,
+                                        num_proj=None,
+                                        proj_clip=None,
+                                        num_unit_shards=None,
+                                        num_proj_shards=None,
+                                        forget_bias=1.0,
+                                        state_is_tuple=True,
+                                        activation=tf.tanh
+                                        )
+
+        GO_symbol = tf.zeros((config.b_size, config.t_embedding_size), dtype=tf.float32)
+        GO_context = tf.zeros((config.b_size, config.h_units), dtype=tf.float32)
+        t_embed_tra = tf.transpose(t_embed, [1,0,2])
+
+        #global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+        states_mapped = tf.reshape(tf.matmul(tf.reshape(H, [-1, config.h_units]), W_a), [-1, config.max_length, config.h_units])
+        switch = tf.greater(self.coin_probs_placeholder, self.schedule_placeholder)
+        switch = tf.cast(switch, dtype=tf.float32)
+        switch_t = tf.transpose(switch, [1,0])
+        Logits = []
+        with tf.variable_scope('decoder_rnn') as scope:
+            initial_state = self.decoder_lstm.zero_state(config.b_size, tf.float32)
+            for time_index in range(config.max_length):
+                if time_index==0:
+                    inp = tf.concat([GO_symbol, GO_context], axis=1)
+                    output, state = self.decoder_lstm(inp, initial_state)
+                else:
+                    scope.reuse_variables()
+                    gold_token = tf.concat([t_embed_tra[time_index-1], C], axis=1)
+                    beta = self.beta_placeholder
+                    if config.inference=='DIF-SCH':
+                        prev_output = tf.matmul(tf.nn.softmax(beta * logits), self.t_lookup_table)
+                    else:
+                        prev_output = tf.nn.embedding_lookup(self.t_lookup_table, tf.argmax(tf.nn.softmax(logits), axis=1))
+
+                    generated_token = tf.concat([prev_output, C], axis=1)
+                    sw = tf.expand_dims(switch_t[time_index-1], axis=1)
+                    inp = tf.multiply(generated_token, sw) + tf.multiply(gold_token, 1.0-sw)
+                    output, state = self.decoder_lstm(inp, state)
+
+                output_dropped = tf.nn.dropout(output, self.dropout_placeholder, seed=self.seed)
+                # global general attention as https://nlp.stanford.edu/pubs/emnlp15_attn.pdf
+
+                Score = tf.reduce_sum(states_mapped * tf.expand_dims(output_dropped, axis=1), axis=2)
+                Att = tf.nn.softmax(Score, dim=1)
+                C = tf.reduce_sum(tf.multiply(tf.expand_dims(Att, axis=2), H), axis=1)
+                final_state = tf.tanh(tf.add(tf.matmul(tf.concat([C, output_dropped], axis=1), W_c), b_c))
+
+                logits = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
+                Logits.append(logits)
+
+        Logits = tf.stack(Logits, axis=1)
+        cross_loss = tf.contrib.seq2seq.sequence_loss(
+                                        logits=Logits,
+                                        targets=self.Y_placeholder,
+                                        weights=self.Y_mask_placeholder,
+                                        average_across_timesteps=True,
+                                        average_across_batch=True
+                                        )
+        self.loss = cross_loss
+        return self.loss
+
     def train_by_actor_critic_rnn(self, H, t_embed, config):
 
         """attention layer"""
@@ -435,9 +557,7 @@ class Model(object):
                     m = tf.add(tf.matmul(final_state, W_softmax), b_softmax)
                     policy = tf.nn.softmax(m)
 
-                    #approximating argmax in finding the token with the high probability.
-                    beta = 10**6
-                    prev_output = tf.matmul(tf.nn.softmax(beta * m), self.t_lookup_table)
+                    prev_output = tf.nn.embedding_lookup(self.t_lookup_table, tf.argmax(policy, axis=1))
                     Policies.append(policy)
 
             Policies = tf.stack(Policies, axis=1)
@@ -445,29 +565,49 @@ class Model(object):
 
             V = tf.reshape(V, (-1, config.max_length))
 
+
             is_true_tag = tf.cast(tf.equal(tf.cast(self.Y_placeholder, tf.int64), tf.argmax(Policies, axis=2)), tf.float32)
-            Rewards = 2 * is_true_tag - 1.0
+            #hamming loss 0, 1
+            Rewards = is_true_tag
             Rewards = tf.multiply(Rewards, self.Y_mask_placeholder)
             V = tf.multiply(V, self.Y_mask_placeholder)
 
             Rewards_t = tf.transpose(Rewards, [1,0])
             V_t = tf.transpose(V, [1,0])
-            Returns = []
 
+            TD_Returns = []
             zeros = tf.cast(self.Y_length_placeholder - self.Y_length_placeholder, tf.float32)
             for t in range(config.max_length):
                 ret = zeros
-                if t < config.max_length - config.n_step:
-                    for i in range(config.n_step):
+                for i in range(config.n_step):
+                    if t + i < config.max_length:
                         ret += (config.gamma ** i) * Rewards_t[t + i]
                         if i == config.n_step - 1:
-                            ret += (config.gamma ** config.n_step) * V_t[t + config.n_step]
+                            if t + i + 1 < config.max_length:
+                                ret += (config.gamma ** config.n_step) * V_t[t + config.n_step]
+                TD_Returns.append(ret)
 
-                Returns.append(ret)
+            MC_Returns = []
+            zeros = tf.cast(self.Y_length_placeholder - self.Y_length_placeholder, tf.float32)
+            for t in range(config.max_length):
+                ret = zeros
+                for i in range(0, config.max_length - t):
+                    ret += (config.gamma ** i) * Rewards_t[t + i]
+                MC_Returns.append(ret)
+
+            if config.inference=='AC-RNN':
+                Returns = TD_Returns
+            else:
+                Returns = MC_Returns
 
             Returns = tf.stack(Returns, axis=1)
+            max_policy = tf.reduce_max(Policies, axis=2)
 
-            Objective = tf.log(tf.reduce_max(Policies, axis=2)) * tf.stop_gradient(Returns - V)
+            if config.inference=='R-RNN':
+                Objective = tf.log(max_policy) * tf.stop_gradient(Returns)
+            else:
+                Objective = tf.log(max_policy) * tf.stop_gradient(Returns - V)
+
             Objective_masked = tf.multiply(Objective, self.Y_mask_placeholder)
 
             V_loss = tf.reduce_mean(tf.pow(tf.stop_gradient(Returns) - V, 2) * self.Y_mask_placeholder)
@@ -477,8 +617,8 @@ class Model(object):
             reg2 = tf.nn.l2_loss(W2_V)
             V_loss = b * tf.reduce_mean(reg1) + b * tf.reduce_mean(reg2) + V_loss
 
-            actor_loss = -tf.reduce_mean(Objective_masked)
-            return actor_loss, V_loss
+            actor_critic_loss = -tf.reduce_mean(Objective_masked)
+            return actor_critic_loss, V_loss
 
         a = self.alpha_placeholder
         def AC_RNN():

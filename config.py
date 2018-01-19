@@ -14,20 +14,23 @@ class Configuration(object):
     t_embedding_size = 100
     max_length = 32
     h_units = 200
-    batch_size = 32
+    batch_size = 128
 
     dropout = 0.5
     learning_rate = 0.0005
     max_gradient_norm = 5.
     max_epochs = 100
-    early_stopping = 4
+    early_stopping = 5
     runs=10
     gamma = 0.7
     n_step = 3
 
-    inference = "CRF"
+    #inference = "CRF"
     #inference = "RNN"
     #inference = "AC-RNN"
+    #inference = "DIF-SCH"
+    #inference = "SCH"
+    #inference = "R-RNN"
+    #inference = "BR-RNN"
 
-    beamsearch = False
     beamsize = 4

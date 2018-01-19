@@ -14,7 +14,7 @@ class Configuration(object):
     t_embedding_size = 100
     max_length = 32
     h_units = 200
-    batch_size = 128
+    batch_size = 32
 
     dropout = 0.5
     learning_rate = 0.0005
@@ -32,5 +32,5 @@ class Configuration(object):
     #inference = "SCH"
     #inference = "R-RNN"
     #inference = "BR-RNN"
-
+    
     beamsize = 4

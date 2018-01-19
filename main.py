@@ -7,7 +7,7 @@ import sys
 import time
 import os
 
-def train(config, model, session, X, X_length, X_mask, alpha, Y, Y_length, Y_mask):
+def train(config, model, session, X, X_length, X_mask, alpha, schedule, beta, Y, Y_length, Y_mask):
 
     #We're interested in keeping track of the loss during training
     total_loss = []
@@ -15,12 +15,20 @@ def train(config, model, session, X, X_length, X_mask, alpha, Y, Y_length, Y_mas
     total_steps = int(np.ceil(len(X) / float(config.batch_size)))
     data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, True)
     for step, (X_in, X_length_in, X_mask_in, Y_in, Y_length_in, Y_mask_in) in enumerate(data):
+
+        b_size = X_length_in.shape[0]
+        #flip coin:
+        coin_probs = np.random.rand(b_size, config.max_length)
+
         feed = model.create_feed_dict(
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
                     dropout=config.dropout,
                     alpha=alpha,
+                    schedule=schedule,
+                    coin_probs=coin_probs,
+                    beta=beta,
                     Y=Y_in,
                     Y_length=Y_length_in,
                     Y_mask=Y_mask_in
@@ -59,19 +67,21 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
     total_steps = int(np.ceil(len(X) / float(config.batch_size)))
     data = ut.data_iterator(X, X_length, X_mask, Y, Y_length, Y_mask, config.batch_size, False)
     for step, (X_in, X_length_in, X_mask_in, Y_in, Y_length_in, Y_mask_in) in enumerate(data):
+        b_size = X_length_in.shape[0]
+    	coin_probs = np.zeros((b_size, config.max_length))
+
         feed = model.create_feed_dict(
                     X=X_in,
                     X_length=X_length_in,
                     X_mask=X_mask_in,
                     dropout=1,
-                    alpha=0.0
+                    alpha=0.0,
+                    schedule=1.0,
+                    coin_probs=coin_probs,
+                    beta=10**8
                     )
 
-        if config.inference=="RNN" or config.inference=="AC-RNN":
-            batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
-            results.append(batch_predicted_indices[0])
-
-        elif config.inference=="CRF":
+        if config.inference=="CRF":
             unary_scores, transition_params = session.run([model.M, model.crf_transition_params], feed_dict=feed)
             batch_results = []
             for unary_scores_each in unary_scores:
@@ -81,6 +91,11 @@ def predict(config, model, session, X, X_length, X_mask, Y=None, Y_length=None, 
                 batch_results.append(predicted_indices)
 
             results.append(batch_results)
+
+        else:
+            batch_predicted_indices = session.run([model.outputs], feed_dict=feed)
+            results.append(batch_predicted_indices[0])
+
     return results
 
 def save_predictions(
@@ -159,7 +174,7 @@ def avg_edit_distance(fileName):
                 dist += LD(ref, pred)
             else:
                 print "Wrong input file format for evaluating!"
-                exit()
+                continue
 
         cost = float(dist/len(lines))
     return cost
@@ -179,13 +194,17 @@ def accuracy(fileName):
                 total_correct += 1
         else:
             print "Wrong input file format for evaluating!"
-            exit()
+            continue
 
     return (total_correct/total_source)*100
 
 
 def run_model():
     config = Configuration()
+    if beam:
+        config.beamsearch=True
+    else:
+        config.beamsearch=False
     data = ut.load(config, 'train')
     test_data = ut.load(config, 'test')
     path = "./EnPe_results"
@@ -194,6 +213,8 @@ def run_model():
 
     #alpha shows how much we care about the reinforcement learning.
     alpha = 0.0
+    schedule = 1.0
+    beta = 10**8
     save_epoch = -1
     model_name = config.inference
     for i in range(config.runs):
@@ -211,17 +232,27 @@ def run_model():
                 best_dev_epoch = 0
                 session.run(init)
 
-                if model_name=='AC-RNN':
+                if model_name=='AC-RNN' or model_name=='R-RNN' or model_name=='BR-RNN':
                     save_epoch = -1
                     saver.restore(session, path + '/' + 'RNN' + '.' + str(run) + '/weights')
                     optimizer_scope = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "adam_optimizer")
                     session.run(tf.variables_initializer(optimizer_scope))
 
                 first_start = time.time()
-                epoch = 0
+                if beam:
+                    epoch=10000
+                else:
+                    epoch=0
                 while (epoch<config.max_epochs):
-                    if model_name=='AC-RNN':
-                        alpha = np.minimum(0.95, 0.5 + epoch * 0.05)
+                    if model_name=='AC-RNN' or model_name=='R-RNN' or model_name=='BR-RNN':
+                        alpha = np.minimum(1.0, 0.5 + epoch * 0.05)
+
+                    if epoch>0 and (model_name=='DIF-SCH' or model_name=='SCH'):
+                        k = 50.0
+                        #annealing beta
+                        beta = np.minimum(10**8, (2)**epoch)
+                        #inverse sigmoid decay
+                        schedule = float(k)/float(k + np.exp(float(epoch)/k))
 
                     print
                     print 'Model:{} Run:{} Epoch:{}'.format(model_name, run, epoch)
@@ -234,6 +265,8 @@ def run_model():
                                                     data['train_data']['X_length'],
                                                     data['train_data']['X_mask'],
                                                     alpha,
+                                                    schedule,
+                                                    beta,
                                                     data['train_data']['Y'],
                                                     data['train_data']['Y_length'],
                                                     data['train_data']['Y_mask']
@@ -301,10 +334,14 @@ def run_model():
 
                 print 'Total prediction time: {} seconds'.format(time.time() - start)
                 print 'Writing predictions to dev.predicted'
+                if beam:
+                    name = "beam.dev.predicted"
+                else:
+                    name = "dev.predicted"
                 save_predictions(
                                 config,
                                 predictions,
-                                path + '/' + model_name + '.' + str(run) + '.' + "dev.predicted",
+                                path + '/' + model_name + '.' + str(run) + '.' + name,
                                 data['dev_data']['X'],
                                 data['dev_data']['X_length'],
                                 data['s_id_to_char'],
@@ -313,7 +350,7 @@ def run_model():
                                 data['dev_data']['Y_length']
                                 )
 
-		print
+                print
                 print 'Model:{} Run:{} Test'.format(model_name, run)
                 predictions = predict(
                                      config,
@@ -326,10 +363,14 @@ def run_model():
 
                 print 'Total prediction time: {} seconds'.format(time.time() - start)
                 print 'Writing predictions to test.predicted'
+                if beam:
+                    name = "beam.test.predicted"
+                else:
+                    name = "test.predicted"
                 save_predictions(
                                 config,
                                 predictions,
-                                path + '/' + model_name + '.' + str(run) + '.' + "test.predicted",
+                                path + '/' + model_name + '.' + str(run) + '.' + name,
                                 test_data['test_data']['X'],
                                 test_data['test_data']['X_length'],
                                 test_data['s_id_to_char'],
@@ -338,4 +379,5 @@ def run_model():
     return
 
 if __name__ == "__main__":
-    run_model()
+    run_model(False)
+    run_model(True)

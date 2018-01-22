@@ -199,7 +199,7 @@ def accuracy(fileName):
     return (total_correct/total_source)*100
 
 
-def run_model():
+def run_model(beam):
     config = Configuration()
     if beam:
         config.beamsearch=True
@@ -248,7 +248,7 @@ def run_model():
                         alpha = np.minimum(1.0, 0.5 + epoch * 0.05)
 
                     if epoch>0 and (model_name=='DIF-SCH' or model_name=='SCH'):
-                        k = 50.0
+                        k = 30.0
                         #annealing beta
                         beta = np.minimum(10**8, (2)**epoch)
                         #inverse sigmoid decay
@@ -317,7 +317,7 @@ def run_model():
                 print 'Total training time: {} seconds'.format(time.time() - first_start)
 
                 saver.restore(session, path + '/' + model_name + '.' + str(run) + '/weights')
-                print
+		print
                 print 'Model:{} Run:{} Dev'.format(model_name, run)
                 start = time.time()
                 predictions = predict(

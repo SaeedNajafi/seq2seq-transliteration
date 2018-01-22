@@ -621,17 +621,17 @@ class Model(object):
             return actor_critic_loss, V_loss
 
         a = self.alpha_placeholder
-        def AC_RNN():
+        def RL():
             cross_loss, dummy_loss = maximum_likelihood()
             actor_loss, V_loss = actor_critic()
             loss = cross_loss * (1-a) + actor_loss * a
             return loss, V_loss
 
-        def RNN():
+        def ML():
             cross_loss, dummy_loss = maximum_likelihood()
             return cross_loss, dummy_loss
 
-        self.loss, self.V_loss = tf.cond(tf.equal(a, tf.constant(0.0, dtype=tf.float32, shape=())), RNN, AC_RNN)
+        self.loss, self.V_loss = tf.cond(tf.equal(a, tf.constant(0.0, dtype=tf.float32, shape=())), ML, RL)
         return self.loss, self.V_loss
 
     def greedy_decoding(self, H, config):

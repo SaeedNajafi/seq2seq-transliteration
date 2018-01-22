@@ -22,8 +22,8 @@ class Configuration(object):
     max_epochs = 100
     early_stopping = 5
     runs=10
-    gamma = 0.7
-    n_step = 3
+    gamma = 0.5
+    n_step = 4
 
     #inference = "CRF"
     #inference = "RNN"
@@ -32,5 +32,5 @@ class Configuration(object):
     #inference = "SCH"
     #inference = "R-RNN"
     #inference = "BR-RNN"
-    
+
     beamsize = 4
